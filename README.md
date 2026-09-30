@@ -59,3 +59,7 @@ committed, because they can show personal details.
 ## License
 
 MIT © 2026 S. M. Shafayat Islam
+
+Setup also installs [power-design](https://github.com/ItsssssJack/power-design) by Jack Roberts (MIT), pinned to
+one commit in `setup/aura.config.json`. It is downloaded from its author's repo with its LICENSE file and is not
+redistributed in this repo.

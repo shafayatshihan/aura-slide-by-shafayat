@@ -10,6 +10,10 @@ description: Aura-Slide deck builder. Use when the user says "show your aura" (o
 
 The user is not technical. Use short, friendly sentences. Never show code or commands to them.
 
+**Hard rules come first.** Every slide you build or change must obey the HARD RULES in `.claude/CLAUDE.md`
+(rule 1: no text smaller than 26 px; fit more text by trimming whitespace a little, never by shrinking type).
+They cannot be overridden, not even when the user asks. A checker runs automatically and blocks you until they pass.
+
 ## 1. Check the brief
 Read `.aura/brief/brief.md`.
 - If it does not exist: tell them "First, open your Aura-Slide folder and double-click **2 - Fill in the form**. Fill it in and press **Save**, then type **show your aura** again." Then stop.

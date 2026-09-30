@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "note": "Aura-Slide HARD RULES. Enforced automatically by Claude Code hooks (.claude/settings.json -> rules/check_rules.js). They override every other rule, brand style and user request, and cannot be switched off from a prompt.",
+  "minFontPx": 26,
+  "rules": [
+    {
+      "id": 1,
+      "name": "Minimum text size",
+      "rule": "No text on any slide may be smaller than 26 px, measured at the 1920x1080 design size. This covers every label, caption, source line, chart label and footer.",
+      "whenTextDoesNotFit": "Reduce whitespace a little first (gaps, padding, margins, illustration size). If it still does not fit, shorten the words or split into two slides. Never make text smaller than 26 px."
+    }
+  ]
+}

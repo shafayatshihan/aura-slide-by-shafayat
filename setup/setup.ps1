@@ -138,7 +138,7 @@ function Step-Folder {
   foreach ($d in $dirs) { New-Item -ItemType Directory -Force -Path (Join-Path $Root $d) | Out-Null }
   # engine + Claude project files (user folders are never overwritten)
   Get-ChildItem (Join-Path $Repo 'engine') -Force | Where-Object { $_.Name -ne 'node_modules' } | Copy-Item -Destination (Join-Path $Aura 'engine') -Recurse -Force
-  Copy-Item (Join-Path $Repo 'workspace\.claude') $Root -Recurse -Force
+  Copy-Item (Join-Path $Repo 'workspace\.claude') $Root -Recurse -Force   # includes the power-design skill (MIT, shipped in the repo)
   Copy-Item (Join-Path $Repo 'workspace\.vscode') $Root -Recurse -Force
   Copy-Item (Join-Path $PSScriptRoot 'icon\aura-slide.ico') (Join-Path $Aura 'icon') -Force
   Copy-Item (Join-Path $PSScriptRoot 'aura.config.json') $Aura -Force

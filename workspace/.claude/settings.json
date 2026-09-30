@@ -20,9 +20,30 @@
       "Bash(mv:*)"
     ],
     "deny": [
+      "Edit(.aura/engine/rules/**)",
+      "Write(.aura/engine/rules/**)",
+      "Edit(.claude/**)",
+      "Write(.claude/**)",
       "Bash(rm -rf:*)",
       "Bash(git push:*)",
       "Read(**/.env)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "node .aura/engine/rules/check_rules.js --hook", "timeout": 120 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node .aura/engine/rules/check_rules.js --stop", "timeout": 180 }
+        ]
+      }
     ]
   }
 }
