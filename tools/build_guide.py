@@ -51,6 +51,7 @@ IMG = {
 }
 ICON = 'data:image/png;base64,' + base64.b64encode(open(os.path.join(REPO, 'setup', 'icon', 'aura-slide.png'), 'rb').read()).decode()
 LINK = 'github.com/shafayatshihan/aura-slide-by-shafayat'
+ZIP = f'https://{LINK}/releases/latest/download/Aura-Slide-Setup.zip'   # clicking it downloads straight away; the PDF stays open
 
 def fig(key, cap, w='100%'):
     return f'<figure style="width:{w}"><img src="{IMG[key]}" alt=""><figcaption>{cap}</figcaption></figure>'
@@ -75,13 +76,16 @@ pages.append(f'''<section class="page cover">
   <div class="need"><h3>The steps</h3><ol class="toc">
     <li>Download</li><li>Unzip</li><li>Start the setup</li><li>Let it install</li><li>Your Aura-Slide folder</li>
     <li>Put your files in</li><li>Fill in the form</li><li>Trust the folder in VS Code</li><li>Sign in to Claude</li><li>Say the magic words</li></ol></div>
-  <p class="link">Download page: <b>{LINK}</b></p>
+  <a class="dl cover-dl" href="{ZIP}">&#11015;&#65039;&nbsp; Download Aura-Slide</a>
+  <p class="link">Project page: <a href="https://{LINK}">{LINK}</a></p>
 </section>''')
-pages.append(page(1, 'Download Aura-Slide', 'Get the setup file from GitHub.', f'''
-  <ol class="do"><li>Open your web browser and go to:<div class="url">{LINK}/releases/latest</div></li>
-  <li>Under <b>Assets</b>, click <b>Aura-Slide-Setup.zip</b>.</li>
-  <li>Your browser saves it in your <b>Downloads</b> folder.</li></ol>
-  {tip('Download it only from this address. Never run an Aura-Slide file someone sends you on WhatsApp or email.')}
+pages.append(page(1, 'Download Aura-Slide', 'Click the button. The download starts by itself.', f'''
+  <a class="dl" href="{ZIP}">&#11015;&#65039;&nbsp; Download Aura-Slide</a>
+  <ol class="do"><li>Click <b>Download Aura-Slide</b> above. This PDF stays open.</li>
+  <li>Your browser saves <b>Aura-Slide-Setup.zip</b> in your <b>Downloads</b> folder.</li>
+  <li>If your browser asks <b>&ldquo;Keep&rdquo;</b> or <b>&ldquo;Save&rdquo;</b>, click it.</li></ol>
+  <p class="small">Button not working? Type this into your browser instead:<br><span class="url">{LINK}/releases/latest</span> and click <b>Aura-Slide-Setup.zip</b>.</p>
+  {tip('Download it only from this page. Never run an Aura-Slide file someone sends you on WhatsApp or email.')}
 ''' + '<h3 class="next">Step 2 &mdash; Unzip it</h3><p class="lead">Open your <b>Downloads</b> folder. <b>Right-click</b> the ZIP file and choose <b>Extract All&hellip;</b></p>'
     + fig('extract_menu', 'Right-click <b>Aura-Slide-Setup</b> &rarr; <b>Extract All&hellip;</b>')))
 pages.append(page(2, 'Unzip it (continued)', 'A small window opens. Just click <b>Extract</b>.', fig('extract_btn', 'Click <b>Extract</b>. Do not change anything else.', '82%')
@@ -157,7 +161,12 @@ figcaption{margin-top:2mm;font-size:11.5pt;color:#454A5C}
 .tip{margin-top:5mm;padding:3.5mm 5mm;border-radius:3mm;background:#EEF2FF;border-left:2mm solid #4D7CFF;font-size:12pt}
 .tip.warn{background:#FFF4E5;border-left-color:#FF6A00}
 ol.do{margin:2mm 0 0;padding-left:7mm;font-size:13pt} ol.do li{margin:2mm 0}
-.url{margin:2mm 0;padding:2.5mm 4mm;border-radius:2mm;background:#1B1740;color:#fff;font:600 13pt Consolas,monospace;display:inline-block}
+.url{margin:2mm 0;padding:2.5mm 4mm;border-radius:2mm;background:#1B1740;color:#fff;font:600 12pt Consolas,monospace;display:inline-block}
+a.dl{display:block;width:fit-content;margin:4mm 0 5mm;padding:5mm 12mm;border-radius:4mm;color:#fff;text-decoration:none;font:700 19pt "Segoe UI",sans-serif;
+  background:linear-gradient(90deg,#2EC9B0,#4D7CFF 55%,#9A5CFF);box-shadow:0 2mm 5mm rgba(77,124,255,.35)}
+a.cover-dl{margin:7mm 0 0;background:#FF6A00;box-shadow:0 2mm 6mm rgba(0,0,0,.35)}
+.small{font-size:11.5pt;color:#454A5C}
+.cover .link a{color:#fff}
 table.what{width:100%;margin-top:5mm;border-collapse:collapse;font-size:12pt}
 table.what td{padding:2mm 3mm;border-bottom:1px solid #E3E1EC;vertical-align:top} table.what td:first-child{width:42%}
 .magic{margin:6mm auto 2mm;width:fit-content;padding:4mm 12mm;border-radius:4mm;background:#1B1740;color:#fff;font:700 24pt "Segoe UI",sans-serif;letter-spacing:.02em}
