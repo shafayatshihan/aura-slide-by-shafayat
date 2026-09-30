@@ -1,0 +1,7 @@
+# Windows scripts must keep CRLF line endings, whatever machine checks them out
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.ico binary
+*.png binary
+*.pdf binary

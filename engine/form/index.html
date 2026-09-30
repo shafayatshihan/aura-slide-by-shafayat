@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aura-Slide · Your presentation</title>
+<link rel="icon" href="/icon.png">
+<style>
+:root{
+  --ink:#1F2230; --soft:#5B6072; --mute:#8A8FA3; --line:#E3E1EC; --card:#FFFFFF; --bg:#F6F4FB;
+  --a1:#2EC9B0; --a2:#4D7CFF; --a3:#9A5CFF; --a4:#FF6FB5; --ok:#15945F; --warn:#C2410C;
+  --r:18px; --f:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:400 18px/1.55 var(--f)}
+header{position:relative;overflow:hidden;padding:26px 24px 22px;color:#fff;
+  background:radial-gradient(900px 300px at 10% -40%,rgba(46,201,176,.85),transparent 60%),
+             radial-gradient(900px 320px at 60% -60%,rgba(154,92,255,.9),transparent 65%),
+             radial-gradient(700px 300px at 100% 0%,rgba(255,111,181,.8),transparent 60%),#1B1740}
+.hwrap{max-width:900px;margin:0 auto;display:flex;align-items:center;gap:16px}
+.hwrap img{width:56px;height:56px;border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+header h1{margin:0;font-size:26px;font-weight:700;letter-spacing:.01em}
+header p{margin:2px 0 0;font-size:17px;opacity:.9}
+.steps{max-width:900px;margin:18px auto 0;display:flex;gap:6px}
+.steps i{flex:1;height:7px;border-radius:4px;background:rgba(255,255,255,.28)}
+.steps i.on{background:#fff}
+main{max-width:900px;margin:0 auto;padding:22px 20px 120px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:26px 26px 28px;box-shadow:0 10px 30px rgba(40,30,90,.06)}
+.kick{font-size:14px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--a3)}
+h2{margin:4px 0 4px;font-size:28px;line-height:1.2}
+.lead{margin:0 0 20px;color:var(--soft)}
+section{display:none} section.on{display:block}
+label.q{display:block;font-weight:600;margin:20px 0 6px}
+label.q small{font-weight:400;color:var(--mute)}
+.req{color:var(--warn)}
+input[type=text],input[type=number],input[type=date],textarea,select{width:100%;font:inherit;color:var(--ink);background:#FCFBFF;
+  border:1.5px solid var(--line);border-radius:12px;padding:11px 14px}
+textarea{min-height:92px;resize:vertical}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--a2);box-shadow:0 0 0 4px rgba(77,124,255,.15)}
+.ex{margin:5px 2px 0;font-size:15px;color:var(--mute)}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.opt{position:relative}
+.opt input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.opt span{display:block;height:100%;padding:13px 16px;border:1.5px solid var(--line);border-radius:14px;background:#FCFBFF;font-weight:600;cursor:pointer}
+.opt span small{display:block;font-weight:400;color:var(--mute);font-size:15px}
+.opt input:checked + span{border-color:var(--a2);background:#EEF2FF;box-shadow:0 0 0 3px rgba(77,124,255,.14)}
+.opt input:focus-visible + span{outline:3px solid var(--a3);outline-offset:2px}
+.row{display:grid;gap:10px;margin-top:10px;align-items:start}
+.row.p3{grid-template-columns:2fr 1fr 1.3fr auto}
+.row.p2{grid-template-columns:2fr 1fr auto}
+.row.s3{grid-template-columns:1.2fr 2fr 1.3fr auto}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.x{border:0;background:transparent;color:var(--mute);font-size:24px;line-height:1;padding:10px 8px;cursor:pointer;border-radius:10px}
+.x:hover{color:var(--warn);background:#FFF1EC}
+.add{margin-top:12px;border:1.5px dashed var(--a2);background:#F4F6FF;color:var(--a2);font:600 16px var(--f);padding:10px 16px;border-radius:12px;cursor:pointer}
+.switch{display:flex;align-items:center;gap:12px;margin:8px 0 4px;font-weight:600;cursor:pointer}
+.switch input{width:22px;height:22px;accent-color:var(--a2)}
+.files{margin-top:14px;display:grid;gap:10px}
+.fold{border:1px solid var(--line);border-radius:14px;padding:12px 16px;background:#FCFBFF}
+.fold b{display:flex;justify-content:space-between;gap:8px}
+.fold b em{font-style:normal;font-weight:600;color:var(--mute);font-size:15px}
+.fold ul{margin:6px 0 0;padding-left:20px;color:var(--soft);font-size:16px}
+.empty{color:var(--mute);font-size:15px;margin:4px 0 0}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.ghost{border:1.5px solid var(--line);background:#fff;color:var(--ink);font:600 16px var(--f);padding:10px 16px;border-radius:12px;cursor:pointer}
+nav.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-top:1px solid var(--line)}
+nav.bar .in{max-width:900px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:12px}
+nav.bar .st{flex:1;color:var(--mute);font-size:15px}
+.nb{font:700 17px var(--f);border-radius:14px;padding:13px 24px;cursor:pointer;border:1.5px solid var(--line);background:#fff;color:var(--ink)}
+.nb.go{border:0;color:#fff;background:linear-gradient(90deg,var(--a2),var(--a3))}
+.nb:disabled{opacity:.4;cursor:default}
+button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
+.err{display:none;margin-top:14px;padding:12px 16px;border-radius:12px;background:#FFF1EC;color:var(--warn);font-weight:600}
+.err.on{display:block}
+.review{display:grid;gap:4px;font-size:16px}
+.review div{display:grid;grid-template-columns:210px 1fr;gap:12px;padding:6px 0;border-bottom:1px solid var(--line)}
+.review div b{color:var(--soft);font-weight:600}
+.done{text-align:center;padding:10px 0 4px}
+.done .big{font-size:64px;line-height:1}
+.phrase{display:inline-block;margin:10px 0 4px;padding:12px 22px;border-radius:14px;background:#1B1740;color:#fff;font:700 26px var(--f);letter-spacing:.02em}
+.hint{font-size:15px;color:var(--mute)}
+@media (max-width:720px){ .two,.row.p3,.row.p2,.row.s3{grid-template-columns:1fr} .review div{grid-template-columns:1fr} }
+@media (prefers-reduced-motion:no-preference){ section.on{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<header>
+  <div class="hwrap"><img src="/icon.png" alt=""><div><h1>Tell Aura-Slide about your presentation</h1>
+  <p>Only 4 questions are required (marked <b>*</b>). Skip anything else and Claude will decide.</p></div></div>
+  <div class="steps" id="dots" aria-hidden="true"></div>
+</header>
+<main>
+<form id="f" class="card" novalidate>
+
+<section data-step="The basics">
+  <div class="kick">Step 1</div><h2>What kind of presentation is it?</h2><p class="lead">Pick the closest one.</p>
+  <div class="opts" role="radiogroup" aria-label="Presentation type">
+    <label class="opt"><input type="radio" name="type" data-k="basics.type" value="Thesis defence"><span>Thesis defence<small>final-year or MSc/PhD</small></span></label>
+    <label class="opt"><input type="radio" name="type" data-k="basics.type" value="Thesis progress / interim"><span>Thesis progress<small>interim or mid-term</small></span></label>
+    <label class="opt"><input type="radio" name="type" data-k="basics.type" value="Project presentation"><span>Project<small>course or group project</small></span></label>
+    <label class="opt"><input type="radio" name="type" data-k="basics.type" value="Class presentation"><span>Class presentation<small>assignment or topic talk</small></span></label>
+    <label class="opt"><input type="radio" name="type" data-k="basics.type" value="Seminar"><span>Seminar<small>department or research</small></span></label>
+    <label class="opt"><input type="radio" name="type" data-k="basics.type" value="Conference talk"><span>Conference talk<small>paper presentation</small></span></label>
+    <label class="opt"><input type="radio" name="type" data-k="basics.type" value="Proposal"><span>Proposal<small>research or funding</small></span></label>
+    <label class="opt"><input type="radio" name="type" data-k="basics.type" value="Lecture"><span>Lecture<small>for teachers</small></span></label>
+    <label class="opt"><input type="radio" name="type" data-k="basics.type" value="Other"><span>Something else</span></label>
+  </div>
+  <div id="otherWrap" hidden><label class="q" for="typeOther">What is it?</label><input type="text" id="typeOther" data-k="basics.typeOther"></div>
+  <label class="q" for="title">Title of your presentation <span class="req">*</span></label>
+  <input type="text" id="title" data-k="basics.title"><p class="ex">Example: Solar-powered water pump for rural irrigation</p>
+  <label class="q" for="subtitle">Subtitle <small>(optional)</small></label><input type="text" id="subtitle" data-k="basics.subtitle">
+  <div class="two">
+    <div><label class="q" for="date">Date of the talk</label><input type="date" id="date" data-k="basics.date"></div>
+    <div><label class="q" for="event">Course or event</label><input type="text" id="event" data-k="basics.event"><p class="ex">Example: EEE 400 Thesis, or ICME 2026</p></div>
+  </div>
+</section>
+
+<section data-step="People">
+  <div class="kick">Step 2</div><h2>Who is presenting?</h2><p class="lead">These go on the title slide and the last slide.</p>
+  <div id="presenters"></div>
+  <button type="button" class="add" id="addPresenter">+ Add another presenter</button>
+  <div class="two">
+    <div><label class="q" for="sup">Supervisor or teacher</label><input type="text" id="sup" data-k="people.supervisor"><p class="ex">Example: Dr. Jane Rahman</p></div>
+    <div><label class="q" for="supT">Their title</label><input type="text" id="supT" data-k="people.supervisorTitle"><p class="ex">Example: Professor, Dept. of EEE</p></div>
+    <div><label class="q" for="inst">University or institution</label><input type="text" id="inst" data-k="people.institution"></div>
+    <div><label class="q" for="dept">Department</label><input type="text" id="dept" data-k="people.department"></div>
+  </div>
+</section>
+
+<section data-step="Audience and time">
+  <div class="kick">Step 3</div><h2>Who is watching, and for how long?</h2><p class="lead">This decides how simple the words are and how many slides you get.</p>
+  <label class="q">Who will watch? <small>(tick all that fit)</small></label>
+  <div class="opts">
+    <label class="opt"><input type="checkbox" data-k="audience.who" value="Examiners / teachers"><span>Examiners or teachers</span></label>
+    <label class="opt"><input type="checkbox" data-k="audience.who" value="Classmates"><span>Classmates</span></label>
+    <label class="opt"><input type="checkbox" data-k="audience.who" value="Researchers / experts"><span>Researchers or experts</span></label>
+    <label class="opt"><input type="checkbox" data-k="audience.who" value="Industry"><span>Industry people</span></label>
+    <label class="opt"><input type="checkbox" data-k="audience.who" value="General public"><span>General public</span></label>
+    <label class="opt"><input type="checkbox" data-k="audience.who" value="School students"><span>School students</span></label>
+  </div>
+  <label class="q">How much do they already know about your topic?</label>
+  <div class="opts">
+    <label class="opt"><input type="radio" name="level" data-k="audience.level" value="New to the topic"><span>Almost nothing</span></label>
+    <label class="opt"><input type="radio" name="level" data-k="audience.level" value="Some background"><span>A little</span></label>
+    <label class="opt"><input type="radio" name="level" data-k="audience.level" value="Experts"><span>A lot, they are experts</span></label>
+  </div>
+  <div class="two">
+    <div><label class="q" for="min">Time limit, in minutes <span class="req">*</span></label><input type="number" id="min" min="1" max="240" data-k="audience.minutes"><p class="ex">Example: 10</p></div>
+    <div><label class="q" for="qa">Question time after, in minutes</label><input type="number" id="qa" min="0" max="120" data-k="audience.qa"></div>
+  </div>
+  <label class="q" for="slides">How many slides? <small>(leave empty and Claude decides from your time)</small></label>
+  <input type="number" id="slides" min="1" max="80" data-k="audience.slides">
+</section>
+
+<section data-step="Your work">
+  <div class="kick">Step 4</div><h2>Tell us about your work</h2><p class="lead">Short answers are fine. Your report files will fill in the details.</p>
+  <label class="q" for="field">Subject area</label><input type="text" id="field" data-k="work.field"><p class="ex">Example: fluid mechanics, molecular dynamics, power electronics, statistics, microbiology</p>
+  <label class="q" for="sum">In one sentence, what did you do?</label><textarea id="sum" data-k="work.summary"></textarea>
+  <p class="ex">Example: We built a low-cost sensor that measures soil moisture and sends it to a phone.</p>
+  <label class="q" for="prob">What problem does it solve, or why does it matter?</label><textarea id="prob" data-k="work.problem"></textarea>
+  <label class="q" for="meth">How did you do it? <small>(method, tools, experiments, simulations)</small></label><textarea id="meth" data-k="work.method"></textarea>
+  <label class="q">Your most important results <small>(up to 5)</small></label>
+  <div id="results"></div>
+  <button type="button" class="add" id="addResult">+ Add a result</button>
+  <label class="q" for="msg">If the audience remembers only one thing, what should it be?</label><input type="text" id="msg" data-k="work.message">
+  <label class="q">Is the work finished?</label>
+  <div class="opts">
+    <label class="opt"><input type="radio" name="status" data-k="work.status" value="Finished"><span>Yes, finished</span></label>
+    <label class="opt"><input type="radio" name="status" data-k="work.status" value="Still going"><span>Still going</span></label>
+  </div>
+  <label class="q" for="futureWork">What comes next? <small>(future work)</small></label><textarea id="futureWork" data-k="work.next"></textarea>
+</section>
+
+<section data-step="Slide plan">
+  <div class="kick">Step 5</div><h2>What should each slide cover?</h2><p class="lead">Optional. Leave it on and Claude plans the slides for you.</p>
+  <label class="switch"><input type="checkbox" id="auto" data-k="plan.auto" checked> Let Claude plan the slides</label>
+  <div id="planWrap" hidden>
+    <p class="ex">Write one line per slide. You can pick a file from your folders to show on that slide.</p>
+    <div id="plan"></div>
+    <button type="button" class="add" id="addSlide">+ Add a slide</button>
+  </div>
+</section>
+
+<section data-step="Your files">
+  <div class="kick">Step 6</div><h2>Your files</h2>
+  <p class="lead">Put your report, pictures and data into the folders, then press <b>Check again</b>. Claude reads everything here.</p>
+  <div class="btnrow"><button type="button" class="ghost" id="openFiles">Open my files folder</button><button type="button" class="ghost" id="refresh">Check again</button></div>
+  <div class="files" id="fileList"></div>
+  <label class="q" for="main">Which file is your main report?</label><select id="main" data-k="files.mainReport"><option value="">I do not have one yet</option></select>
+  <label class="q" for="avoid">Any file Claude should not use?</label><input type="text" id="avoid" data-k="files.avoid">
+</section>
+
+<section data-step="Special content">
+  <div class="kick">Step 7</div><h2>Anything special on the slides?</h2><p class="lead">Tick what you need.</p>
+  <div class="opts">
+    <label class="opt"><input type="checkbox" data-k="content.include" value="Equations"><span>Equations</span></label>
+    <label class="opt"><input type="checkbox" data-k="content.include" value="Tables"><span>Tables</span></label>
+    <label class="opt"><input type="checkbox" data-k="content.include" value="Charts from my data"><span>Charts from my data</span></label>
+    <label class="opt"><input type="checkbox" data-k="content.include" value="My photos"><span>My photos</span></label>
+    <label class="opt"><input type="checkbox" data-k="content.include" value="Videos"><span>Videos</span></label>
+    <label class="opt"><input type="checkbox" data-k="content.include" value="References slide"><span>References slide</span></label>
+    <label class="opt"><input type="checkbox" data-k="content.include" value="Acknowledgements slide"><span>Thank-you to people</span></label>
+    <label class="opt"><input type="checkbox" data-k="content.include" value="Thank you and questions slide"><span>"Questions?" end slide</span></label>
+    <label class="opt"><input type="checkbox" data-k="content.include" value="Contact details"><span>My contact details</span></label>
+  </div>
+  <label class="q" for="cite">If you show references, which style?</label>
+  <select id="cite" data-k="content.citations"><option value="">Claude decides</option><option>IEEE</option><option>APA</option><option>Harvard</option><option>My department's style</option></select>
+</section>
+
+<section data-step="On the day">
+  <div class="kick">Step 8</div><h2>On presentation day</h2><p class="lead">So your slides work on the day.</p>
+  <label class="q">Where will you show it?</label>
+  <div class="opts">
+    <label class="opt"><input type="checkbox" data-k="delivery.where" value="Projector in a room"><span>Projector in a room</span></label>
+    <label class="opt"><input type="checkbox" data-k="delivery.where" value="Big TV"><span>Big TV</span></label>
+    <label class="opt"><input type="checkbox" data-k="delivery.where" value="Online meeting"><span>Online (Zoom, Meet, Teams)</span></label>
+    <label class="opt"><input type="checkbox" data-k="delivery.where" value="Phone"><span>From my phone</span></label>
+  </div>
+  <label class="q">Will that computer have internet?</label>
+  <div class="opts">
+    <label class="opt"><input type="radio" name="off" data-k="delivery.offline" value="No internet - must work offline"><span>No, or not sure</span></label>
+    <label class="opt"><input type="radio" name="off" data-k="delivery.offline" value="Internet available"><span>Yes</span></label>
+  </div>
+  <label class="q">Backup copies <small>(in case something fails)</small></label>
+  <div class="opts">
+    <label class="opt"><input type="checkbox" data-k="delivery.backups" value="PDF"><span>PDF</span></label>
+    <label class="opt"><input type="checkbox" data-k="delivery.backups" value="PowerPoint"><span>PowerPoint</span></label>
+  </div>
+  <label class="q">Help for speaking</label>
+  <div class="opts">
+    <label class="opt"><input type="checkbox" data-k="delivery.help" value="Speaker notes"><span>Speaker notes<small>what to say, per slide</small></span></label>
+    <label class="opt"><input type="checkbox" data-k="delivery.help" value="Timed speaker script"><span>Timed script<small>word-for-word, with timing</small></span></label>
+  </div>
+  <label class="q">Will you use a clicker (presenter remote)?</label>
+  <div class="opts">
+    <label class="opt"><input type="radio" name="clk" data-k="delivery.clicker" value="Yes"><span>Yes</span></label>
+    <label class="opt"><input type="radio" name="clk" data-k="delivery.clicker" value="No"><span>No</span></label>
+    <label class="opt"><input type="radio" name="clk" data-k="delivery.clicker" value="Not sure"><span>Not sure</span></label>
+  </div>
+</section>
+
+<section data-step="Anything else">
+  <div class="kick">Step 9</div><h2>Anything else?</h2><p class="lead">Last step. All optional.</p>
+  <label class="q" for="ex1">Anything Claude should avoid?</label><input type="text" id="ex1" data-k="extra.avoid"><p class="ex">Example: no jokes, do not show our raw data</p>
+  <label class="q" for="ex2">When do you need the slides?</label><input type="date" id="ex2" data-k="extra.deadline">
+  <label class="q" for="ex3">Other notes for Claude</label><textarea id="ex3" data-k="extra.notes"></textarea>
+</section>
+
+<section data-step="Check and save">
+  <div class="kick">Last check</div><h2>Does this look right?</h2><p class="lead">Press <b>Save</b>. You can come back and change it any time.</p>
+  <div class="review" id="review"></div>
+</section>
+
+<section data-step="Saved" id="doneStep">
+  <div class="done">
+    <div class="big" aria-hidden="true">&#10024;</div>
+    <h2>Saved!</h2>
+    <p class="lead">Now go to <b>VS Code</b>, click the <b>Claude</b> icon, and type:</p>
+    <div class="phrase">show your aura</div>
+    <p class="hint" id="savedAt"></p>
+    <p class="hint">You can close this page. To change your answers later, open your Aura-Slide folder and double-click <b>2 - Fill in the form</b>.</p>
+  </div>
+</section>
+
+<div class="err" id="err" role="alert"></div>
+</form>
+</main>
+<nav class="bar"><div class="in">
+  <span class="st" id="stepName"></span>
+  <button type="button" class="nb" id="back">Back</button>
+  <button type="button" class="nb go" id="next">Next</button>
+</div></nav>
+
+<script>
+(function(){
+  var f = document.getElementById('f'), secs = [].slice.call(f.querySelectorAll('section')), cur = 0;
+  var dots = document.getElementById('dots'); secs.forEach(function(){ dots.appendChild(document.createElement('i')); });
+  var state = {}, files = [];
+  var LS = 'aura-slide-form';
+  function get(o, p){ return p.split('.').reduce(function(a, k){ return a && a[k]; }, o); }
+  function set(o, p, v){ var ks = p.split('.'), a = o; ks.slice(0, -1).forEach(function(k){ a = a[k] = a[k] || {}; }); a[ks[ks.length - 1]] = v; }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  // ---- repeaters (presenters, results, slide plan)
+  var REP = {
+    presenters: { box: 'presenters', path: 'people.presenters', cls: 'p3', max: 8, min: 1,
+      cols: [['name', 'Name', 'Presenter name *'], ['id', 'ID', 'Student ID'], ['role', 'Role', 'Role (optional)']] },
+    results: { box: 'results', path: 'work.results', cls: 'p2', max: 5, min: 1,
+      cols: [['what', 'Result', 'What you found'], ['value', 'Value', 'Number or unit']] },
+    plan: { box: 'plan', path: 'plan.slides', cls: 's3', max: 60, min: 3,
+      cols: [['title', 'Slide title', 'Slide title'], ['covers', 'What it covers', 'What this slide covers'], ['file', 'File', '', 'file']] }
+  };
+  function fileOptions(sel){
+    var o = '<option value="">No file</option>';
+    files.forEach(function(g){ g.files.forEach(function(p){ o += '<option' + (p === sel ? ' selected' : '') + '>' + esc(p) + '</option>'; }); });
+    return o;
+  }
+  function drawRep(name){
+    var R = REP[name], box = document.getElementById(R.box), rows = get(state, R.path) || [];
+    while (rows.length < R.min) rows.push({});
+    set(state, R.path, rows);
+    box.innerHTML = rows.map(function(r, i){
+      return '<div class="row ' + R.cls + '">' + R.cols.map(function(c){
+        if (c[3] === 'file') return '<select aria-label="File for slide ' + (i + 1) + '" data-r="' + name + '" data-i="' + i + '" data-c="' + c[0] + '">' + fileOptions(r[c[0]]) + '</select>';
+        return '<input type="text" placeholder="' + esc(c[2]) + '" aria-label="' + esc(c[1]) + ' ' + (i + 1) + '" data-r="' + name + '" data-i="' + i + '" data-c="' + c[0] + '" value="' + esc(r[c[0]]) + '">';
+      }).join('') + '<button type="button" class="x" aria-label="Remove row ' + (i + 1) + '" data-del="' + name + '" data-i="' + i + '">&times;</button></div>';
+    }).join('');
+  }
+  f.addEventListener('input', function(e){
+    var t = e.target;
+    if (t.dataset.r) { get(state, REP[t.dataset.r].path)[+t.dataset.i][t.dataset.c] = t.value; persist(); return; }
+    if (t.dataset.k) { collect(); }
+  });
+  f.addEventListener('change', function(e){ if (e.target.dataset.r) { get(state, REP[e.target.dataset.r].path)[+e.target.dataset.i][e.target.dataset.c] = e.target.value; persist(); } else collect(); });
+  f.addEventListener('click', function(e){
+    var d = e.target.closest('[data-del]'); if (!d) return;
+    var R = REP[d.dataset.del], rows = get(state, R.path); rows.splice(+d.dataset.i, 1); drawRep(d.dataset.del); persist();
+  });
+  function adder(btn, name){ document.getElementById(btn).addEventListener('click', function(){
+    var R = REP[name], rows = get(state, R.path) || []; if (rows.length >= R.max) return; rows.push({}); set(state, R.path, rows); drawRep(name);
+    var box = document.getElementById(R.box), last = box.lastElementChild; if (last) last.querySelector('input,select').focus(); }); }
+  adder('addPresenter', 'presenters'); adder('addResult', 'results'); adder('addSlide', 'plan');
+
+  // ---- simple fields
+  function collect(){
+    var seen = {};
+    [].forEach.call(f.querySelectorAll('[data-k]'), function(el){
+      var k = el.dataset.k;
+      if (el.type === 'checkbox' && el.id !== 'auto') { if (!seen[k]) { seen[k] = 1; set(state, k, []); } if (el.checked) get(state, k).push(el.value); }
+      else if (el.type === 'checkbox') set(state, k, el.checked);
+      else if (el.type === 'radio') { if (el.checked) set(state, k, el.value); else if (!seen[k]) { seen[k] = 1; if (get(state, k) === undefined) set(state, k, ''); } }
+      else set(state, k, el.value);
+    });
+    document.getElementById('otherWrap').hidden = get(state, 'basics.type') !== 'Other';
+    document.getElementById('planWrap').hidden = !!get(state, 'plan.auto');
+    persist();
+  }
+  function fill(){
+    [].forEach.call(f.querySelectorAll('[data-k]'), function(el){
+      var v = get(state, el.dataset.k);
+      if (el.type === 'checkbox' && el.id !== 'auto') el.checked = Array.isArray(v) && v.indexOf(el.value) >= 0;
+      else if (el.type === 'checkbox') el.checked = v !== false;
+      else if (el.type === 'radio') el.checked = v === el.value;
+      else if (v != null && el.tagName !== 'SELECT') el.value = v;
+    });
+    Object.keys(REP).forEach(drawRep); collect();
+  }
+  function persist(){ try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} }
+
+  // ---- files
+  function loadFiles(){
+    return fetch('/api/files').then(function(r){ return r.json(); }).then(function(list){
+      files = list; var el = document.getElementById('fileList'), n = 0;
+      el.innerHTML = list.map(function(g){
+        n += g.files.length;
+        return '<div class="fold"><b>' + esc(g.folder) + '<em>' + g.files.length + ' file' + (g.files.length === 1 ? '' : 's') + '</em></b>' +
+          (g.files.length ? '<ul>' + g.files.slice(0, 8).map(function(p){ return '<li>' + esc(p.split('/').slice(1).join('/')) + '</li>'; }).join('') +
+          (g.files.length > 8 ? '<li>and ' + (g.files.length - 8) + ' more</li>' : '') + '</ul>' : '<p class="empty">Empty</p>') + '</div>';
+      }).join('');
+      var sel = document.getElementById('main'), keep = get(state, 'files.mainReport') || '';
+      sel.innerHTML = '<option value="">I do not have one yet</option>' + fileOptions(keep).replace('<option value="">No file</option>', '');
+      sel.value = keep; drawRep('plan');
+    }).catch(function(){});
+  }
+  document.getElementById('openFiles').addEventListener('click', function(){ fetch('/api/open-files', {method: 'POST'}); });
+  document.getElementById('refresh').addEventListener('click', loadFiles);
+
+  // ---- steps
+  var back = document.getElementById('back'), next = document.getElementById('next'), err = document.getElementById('err');
+  function problem(){
+    var s = secs[cur].dataset.step;
+    if (s === 'The basics') { if (!get(state, 'basics.type')) return 'Please pick a presentation type.'; if (!(get(state, 'basics.title') || '').trim()) return 'Please write the title.'; }
+    if (s === 'People') { var p = get(state, 'people.presenters') || []; if (!p[0] || !(p[0].name || '').trim()) return 'Please write at least one presenter name.'; }
+    if (s === 'Audience and time') { if (!(+get(state, 'audience.minutes') > 0)) return 'Please write the time limit in minutes.'; }
+    return '';
+  }
+  function show(i){
+    cur = Math.max(0, Math.min(secs.length - 1, i));
+    secs.forEach(function(s, k){ s.classList.toggle('on', k === cur); });
+    [].forEach.call(dots.children, function(d, k){ d.classList.toggle('on', k <= cur); });
+    var last = secs[cur].id === 'doneStep', review = secs[cur].dataset.step === 'Check and save';
+    document.getElementById('stepName').textContent = last ? 'All saved' : 'Step ' + (cur + 1) + ' of ' + (secs.length - 1) + ' · ' + secs[cur].dataset.step;
+    back.disabled = cur === 0; back.hidden = last; next.hidden = last;
+    next.textContent = review ? 'Save' : 'Next';
+    err.classList.remove('on');
+    if (secs[cur].dataset.step === 'Your files') loadFiles();
+    if (review) drawReview();
+    window.scrollTo(0, 0);
+  }
+  function drawReview(){
+    var rows = [['Type', get(state, 'basics.typeOther') || get(state, 'basics.type')], ['Title', get(state, 'basics.title')],
+      ['Presenters', (get(state, 'people.presenters') || []).map(function(p){ return p.name; }).filter(Boolean).join(', ')],
+      ['Supervisor', get(state, 'people.supervisor')], ['Time limit', get(state, 'audience.minutes') ? get(state, 'audience.minutes') + ' minutes' : ''],
+      ['Slides', get(state, 'audience.slides') || 'Claude decides'], ['Subject', get(state, 'work.field')], ['What you did', get(state, 'work.summary')],
+      ['Slide plan', get(state, 'plan.auto') ? 'Claude plans it' : ((get(state, 'plan.slides') || []).filter(function(s){ return s.title || s.covers; }).length + ' slides planned by you')],
+      ['Main report', get(state, 'files.mainReport') || 'none yet'], ['Backups', (get(state, 'delivery.backups') || []).join(', ')]];
+    document.getElementById('review').innerHTML = rows.map(function(r){ return '<div><b>' + r[0] + '</b><span>' + (esc(r[1]) || '<span class="hint">not given</span>') + '</span></div>'; }).join('');
+  }
+  back.addEventListener('click', function(){ show(cur - 1); });
+  next.addEventListener('click', function(){
+    collect(); var p = problem(); if (p) { err.textContent = p; err.classList.add('on'); return; }
+    if (secs[cur].dataset.step !== 'Check and save') { save(false); show(cur + 1); return; }
+    save(true);
+  });
+  function save(final){
+    return fetch('/api/brief', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(state)})
+      .then(function(r){ return r.json(); }).then(function(j){
+        if (final) { document.getElementById('savedAt').textContent = 'Saved ' + j.savedAt + ' in your Aura-Slide folder.'; show(secs.length - 1); }
+      }).catch(function(){ if (final) { err.textContent = 'Could not save. Please close this page and double-click "2 - Fill in the form" again.'; err.classList.add('on'); } });
+  }
+
+  // ---- start: server copy first, then this browser's draft
+  fetch('/api/brief').then(function(r){ return r.json(); }).catch(function(){ return {}; }).then(function(srv){
+    var draft = null; try { draft = JSON.parse(localStorage.getItem(LS) || 'null'); } catch (e) {}
+    state = (srv && Object.keys(srv).length) ? srv : (draft || {});
+    if (state.plan === undefined) state.plan = {auto: true};
+    fill(); loadFiles(); show(0);
+  });
+})();
+</script>
+</body>
+</html>

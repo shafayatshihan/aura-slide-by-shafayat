@@ -1,0 +1,9 @@
+node_modules/
+__pycache__/
+*.pyc
+dist/
+release/
+# raw screenshots can contain personal details (email, login codes); only the blurred PDF is published
+docs/screenshots/
+docs/guide/
+setup/icon/preview_sheet.png

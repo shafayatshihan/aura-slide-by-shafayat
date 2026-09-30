@@ -1,0 +1,34 @@
+# On every push to main: build Aura-Slide-Setup.zip and put it on the release named after the version in
+# setup/aura.config.json. Same version -> the zip on that release is replaced; new version -> a new release is made.
+# The PDF's download link (releases/latest/download/Aura-Slide-Setup.zip) therefore always gets the newest zip.
+name: Build release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the zip
+        run: python tools/make_release.py
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(python -c "import json;print(json.load(open('setup/aura.config.json'))['version'])")
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/Aura-Slide-Setup.zip --clobber
+            echo "Updated the zip on $TAG"
+          else
+            gh release create "$TAG" release/Aura-Slide-Setup.zip --title "Aura-Slide $VERSION" --latest \
+              --notes "Download **Aura-Slide-Setup.zip** below, then follow *1 - Read me first.pdf*. Only for Claude premium users."
+            echo "Created $TAG"
+          fi

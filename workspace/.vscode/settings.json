@@ -1,0 +1,20 @@
+{
+  "files.exclude": {
+    "**/.aura": true,
+    "**/.claude": true,
+    "**/.vscode": true,
+    "**/desktop.ini": true,
+    "**/*.lnk": true
+  },
+  "workbench.startupEditor": "none",
+  "workbench.tips.enabled": false,
+  "explorer.confirmDragAndDrop": true,
+  "explorer.confirmDelete": true,
+  "files.hotExit": "onExitAndWindowClose",
+  "extensions.ignoreRecommendations": true,
+  "chat.disableAIFeatures": true,
+  "chat.commandCenter.enabled": false,
+  "claudeCode.focusView": true,
+  "claudeCode.hideOnboarding": true,
+  "claudeCode.initialPermissionMode": "acceptEdits"
+}
