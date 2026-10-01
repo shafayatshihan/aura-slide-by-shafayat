@@ -1,14 +1,18 @@
-# Aura-Slide by Shafayat - one-click setup for Windows 10/11.
-# Makes C:\Aura-Slide by Shafayat, installs whatever is missing (Git, Node.js, Python, Claude Code, the slide engine),
-# adds the icon and shortcuts, then opens the Aura-Slide app.
+# Lumi (by Shafayat, formerly Aura-Slide) - one-click setup for Windows 10/11.
+# Makes C:\Lumi, installs whatever is missing (Git, Node.js, Python, Claude Code, the slide engine),
+# adds the icon and shortcuts, then opens the Lumi app.
 # Safe to run again: anything already installed is skipped and the user's own files are never touched.
-#   -Json      no console drawing: print one JSON line per step event instead, for AuraSlide.exe to show:
+#   -Json      no console drawing: print one JSON line per step event instead, for Lumi.exe to show:
 #              {"step":n,"total":N,"name":"...","state":"start|ok|have|fail","detail":"..."}
 #              The first line has state "plan" and lists every step name in "detail", separated by "|".
 #              Step 0 is the quick check of this PC (Windows version, free space, internet, winget).
 #   -NoLaunch  do not open the app at the end.
 # Env AURA_ROOT installs somewhere else (developer tests); shortcuts then go into that folder, not the real Desktop.
-# Env AURA_EXE is the AuraSlide.exe to install when this release has none of its own (AuraSlide.exe passes itself).
+# Env AURA_EXE is the Lumi.exe to install when this release has none of its own (Lumi.exe passes itself).
+# Moving from Aura-Slide: an old install (C:\Aura-Slide by Shafayat) has its user folders copied into C:\Lumi (files
+# already in C:\Lumi are never overwritten) and the old folder is left in place for the user to delete. An Aura-Slide
+# 0.3 app that runs this as its update passes AURA_ROOT=<old folder>: that is treated as the move, not a test install.
+# Env AURA_LEGACY_ROOT points a developer test install at a fake old folder to copy from.
 # Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less scripts in the ANSI code page.
 param([switch]$NoLaunch, [switch]$Json)
 
@@ -18,13 +22,19 @@ $ProgressPreference = 'SilentlyContinue'
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
 
 $Repo  = Split-Path -Parent $PSScriptRoot
-$DefaultRoot = 'C:\Aura-Slide by Shafayat'
-$Root  = if ($env:AURA_ROOT) { [IO.Path]::GetFullPath($env:AURA_ROOT) } else { $DefaultRoot }
-$TestInstall = ($Root.TrimEnd('\') -ne $DefaultRoot)
+$DefaultRoot = 'C:\Lumi'
+$OldRoot = 'C:\Aura-Slide by Shafayat'
+$Root  = if ($env:AURA_ROOT) { [IO.Path]::GetFullPath($env:AURA_ROOT).TrimEnd('\') } else { $DefaultRoot }
+$FromOldApp = ($Root -eq $OldRoot)                       # an Aura-Slide 0.3 app is running this as its update
+if ($FromOldApp) { $Root = $DefaultRoot }
+$TestInstall = ($Root -ne $DefaultRoot)
+$Legacy = if ($TestInstall) { $env:AURA_LEGACY_ROOT } else { $OldRoot }
+if ($Legacy -and -not (Test-Path (Join-Path $Legacy '.aura'))) { $Legacy = $null }
 $Aura  = Join-Path $Root '.aura'
 $Logs  = Join-Path $Aura 'logs'
 $Stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
 $Log   = $null
+$MovedFrom = $null
 $Config = Get-Content (Join-Path $PSScriptRoot 'aura.config.json') -Raw | ConvertFrom-Json
 
 # ---------------------------------------------------------------- look & feel
@@ -35,13 +45,13 @@ $GLYPH = @{
   'R' = @('#### ', '#   #', '#### ', '#  # ', '#   #'); '-' = @('    ', '    ', '### ', '    ', '    ')
   'S' = @(' ####', '#    ', ' ### ', '    #', '#### '); 'L' = @('#    ', '#    ', '#    ', '#    ', '#####')
   'I' = @('###', ' # ', ' # ', ' # ', '###');           'D' = @('#### ', '#   #', '#   #', '#   #', '#### ')
-  'E' = @('#####', '#    ', '#### ', '#    ', '#####')
+  'E' = @('#####', '#    ', '#### ', '#    ', '#####'); 'M' = @('#   #', '## ##', '# # #', '#   #', '#   #')
 }
 function Banner {
   if ($Json) { return }
   Clear-Host
   Line ''
-  $word = 'AURA-SLIDE'; $cols = @('Cyan', 'Cyan', 'Cyan', 'Cyan', 'DarkGray', 'Magenta', 'Magenta', 'Magenta', 'Magenta', 'Magenta')
+  $word = 'LUMI'; $cols = @('Cyan', 'Cyan', 'Magenta', 'Magenta')
   for ($r = 0; $r -lt 5; $r++) {
     Write-Host '   ' -NoNewline
     for ($c = 0; $c -lt $word.Length; $c++) { Write-Host (($GLYPH[[string]$word[$c]][$r]) -replace '#', $FULL) -ForegroundColor $cols[$c] -NoNewline; Write-Host ' ' -NoNewline }
@@ -69,7 +79,7 @@ function Ok([string]$m)   { Tag ' OK' 'Green' $m }
 function Skip([string]$m) { Tag 'FOUND' 'DarkCyan' $m }
 function Bad([string]$m)  { Tag ' FAIL' 'Red' $m }
 function Log([string]$m)  { if ($Log) { Add-Content -Path $Log -Value ('[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $m) } }
-# One JSON progress line for AuraSlide.exe (only with -Json). Written straight to stdout, flushed at once.
+# One JSON progress line for Lumi.exe (only with -Json). Written straight to stdout, flushed at once.
 function Emit([int]$step, [string]$name, [string]$state, [string]$detail = '') {
   if (-not $Json) { return }
   $o = [ordered]@{ step = $step; total = $Steps.Count; name = $name; state = $state; detail = $detail }
@@ -133,7 +143,7 @@ function Node-Ok { if (-not (Has 'node')) { return $false }; try { $v = (& node 
 
 # ---------------------------------------------------------------- steps
 $Steps = @(
-  @{ n = 'Your Aura-Slide folder';                 f = 'Step-Folder' },
+  @{ n = 'Your Lumi folder';                       f = 'Step-Folder' },
   @{ n = 'Git (needed by Claude on Windows)';      f = 'Step-Git' },
   @{ n = 'Node.js (runs the 3D slide engine)';     f = 'Step-Node' },
   @{ n = 'Python (makes PDF and PowerPoint)';      f = 'Step-Python' },
@@ -148,7 +158,7 @@ function Step-Folder {
   $dirs = @('3 - Put your files here\Report', '3 - Put your files here\Images and photos', '3 - Put your files here\Data (csv, excel, graphs)',
             '3 - Put your files here\Logo and university template', '3 - Put your files here\Previous year reports',
             '3 - Put your files here\Journal papers', '3 - Put your files here\Anything else',
-            '4 - Your slides\Older versions', '.aura\engine', '.aura\temp', '.aura\logs', '.aura\brief', '.aura\icon')
+            '4 - Your slides\Older versions', '.aura\engine', '.aura\temp', '.aura\logs', '.aura\brief')
   foreach ($d in $dirs) { New-Item -ItemType Directory -Force -Path (Join-Path $Root $d) | Out-Null }
   # engine + Claude project files: replaced cleanly so old versions never pile up (user folders are never touched;
   # node_modules and Claude's own settings.local.json are kept)
@@ -156,11 +166,34 @@ function Step-Folder {
   Get-ChildItem (Join-Path $Root '.claude') -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'settings.local.json' } | Remove-Item -Recurse -Force
   Get-ChildItem (Join-Path $Repo 'engine') -Force | Where-Object { $_.Name -ne 'node_modules' } | Copy-Item -Destination (Join-Path $Aura 'engine') -Recurse -Force
   Copy-Item (Join-Path $Repo 'workspace\.claude') $Root -Recurse -Force   # includes the power-design skill (MIT, shipped in the repo)
-  Copy-Item (Join-Path $PSScriptRoot 'icon\aura-slide.ico') (Join-Path $Aura 'icon') -Force
+  Copy-Item (Join-Path $PSScriptRoot 'icon\lumi\lumi.ico') (Join-Path $Aura 'lumi.ico') -Force
   Copy-Item (Join-Path $PSScriptRoot 'aura.config.json') $Aura -Force
   $oldGuide = Join-Path $Root '1 - Read me first.pdf'; if (Test-Path $oldGuide) { Remove-Item $oldGuide -Force }   # guide retired in 0.3
   foreach ($h in @('.aura', '.claude')) { (Get-Item (Join-Path $Root $h) -Force).Attributes = 'Directory, Hidden, System' }
+  $moved = Copy-OldFiles
+  if ($moved -gt 0) { return "your files were copied from $Legacy" }
   if ($made) { return 'created ' + $Root } else { return 'already there, your files are untouched' }
+}
+# Moving from Aura-Slide: copy the user's own folders across, never overwriting a file already in the new folder.
+# The old folder is left exactly as it is (the user deletes it once they have checked their files).
+function Copy-OldFiles {
+  if (-not $Legacy) { return 0 }
+  $n = 0
+  foreach ($top in '3 - Put your files here', '4 - Your slides') {
+    $from = Join-Path $Legacy $top
+    if (-not (Test-Path $from)) { continue }
+    $base = (Get-Item $from -Force).FullName.TrimEnd('\')
+    foreach ($f in Get-ChildItem $from -Recurse -File -Force -ErrorAction SilentlyContinue) {
+      $rel = $f.FullName.Substring($base.Length).TrimStart('\')
+      $dest = Join-Path (Join-Path $Root $top) $rel
+      if (Test-Path $dest) { continue }
+      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+      try { Copy-Item $f.FullName $dest; $n++ } catch { Log ('could not copy ' + $f.FullName + ': ' + $_.Exception.Message) }
+    }
+  }
+  Log "copied $n file(s) from $Legacy"
+  $script:MovedFrom = $Legacy
+  return $n
 }
 function Step-Git {
   if (Has 'git') { return 'HAVE' }
@@ -207,20 +240,22 @@ function Step-Pip {
   'ready'
 }
 function Step-Shortcuts {
-  $ico = Join-Path $Aura 'icon\aura-slide.ico'
-  # the app itself: AuraSlide.exe from this release (at its root), else the one that is running this setup
-  $exe = Join-Path $Aura 'AuraSlide.exe'
-  $src = @((Join-Path $Repo 'AuraSlide.exe'), $env:AURA_EXE) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+  $ico = Join-Path $Aura 'lumi.ico'
+  # the app itself: Lumi.exe from this release (at its root), else the one that is running this setup
+  # (never an old AuraSlide.exe that is running this as its update)
+  $exe = Join-Path $Aura 'Lumi.exe'
+  $runner = if ($env:AURA_EXE -and ((Split-Path -Leaf $env:AURA_EXE) -notlike 'AuraSlide*')) { $env:AURA_EXE } else { $null }
+  $src = @((Join-Path $Repo 'Lumi.exe'), $runner) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
   if ($src -and ([IO.Path]::GetFullPath($src) -ne [IO.Path]::GetFullPath($exe))) {
-    try { Copy-Item $src $exe -Force } catch { Log ('could not copy AuraSlide.exe: ' + $_.Exception.Message) }   # in use: kept
+    try { Copy-Item $src $exe -Force } catch { Log ('could not copy Lumi.exe: ' + $_.Exception.Message) }   # in use: kept
   }
   $hasExe = Test-Path $exe
   if ($hasExe) { Unblock-File $exe -ErrorAction SilentlyContinue }   # a copy keeps the "downloaded from the internet" mark
-  else { Log 'AuraSlide.exe is not in this release: the shortcuts open engine\start.ps1 instead' }
+  else { Log 'Lumi.exe is not in this release: the shortcuts open engine\start.ps1 instead' }
   # folder icon
   $ini = Join-Path $Root 'desktop.ini'
   if (Test-Path $ini) { (Get-Item $ini -Force).Attributes = 'Normal' }
-  Set-Content -Path $ini -Encoding Unicode -Value "[.ShellClassInfo]`r`nIconResource=$ico,0`r`nInfoTip=Aura-Slide by Shafayat`r`n"
+  Set-Content -Path $ini -Encoding Unicode -Value "[.ShellClassInfo]`r`nIconResource=$ico,0`r`nInfoTip=Lumi`r`n"
   (Get-Item $ini -Force).Attributes = 'Hidden, System'
   (Get-Item $Root -Force).Attributes = 'Directory, ReadOnly'
   $sh = New-Object -ComObject WScript.Shell
@@ -229,7 +264,7 @@ function Step-Shortcuts {
     $l = $sh.CreateShortcut($path); $l.TargetPath = $target; $l.Arguments = $argz; $l.IconLocation = "$ico,0"
     $l.WorkingDirectory = $Root; $l.Description = $tip; $l.WindowStyle = $style; $l.Save()
   }
-  # old shortcuts from earlier versions: the desktop icon now opens, repairs and updates Aura-Slide by itself
+  # old shortcuts from earlier versions: the desktop icon now opens, repairs and updates Lumi by itself
   foreach ($old in '2 - Start Aura-Slide.lnk', 'Start Aura-Slide.lnk', '2 - Fill in the form.lnk', 'Update Aura-Slide.lnk') {
     $o = Join-Path $Root $old; if (Test-Path $o) { Remove-Item $o -Force }
   }
@@ -242,8 +277,10 @@ function Step-Shortcuts {
   }
   if ($hasExe) { $tgt = $exe; $argz = ''; $style = 1 }
   else { $tgt = $ps; $argz = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $Aura 'engine\start.ps1') + '"'; $style = 7 }
-  Lnk (Join-Path $desk 'Aura-Slide.lnk') $tgt $argz 'Open Aura-Slide' $style
-  Lnk (Join-Path $menuDir 'Aura-Slide.lnk') $tgt $argz 'Open Aura-Slide' $style
+  # the app was called Aura-Slide before 0.4: its Desktop and Start menu icons are replaced by the Lumi ones
+  foreach ($d in $desk, $menuDir) { $o = Join-Path $d 'Aura-Slide.lnk'; if (Test-Path $o) { Remove-Item $o -Force } }
+  Lnk (Join-Path $desk 'Lumi.lnk') $tgt $argz 'Open Lumi' $style
+  Lnk (Join-Path $menuDir 'Lumi.lnk') $tgt $argz 'Open Lumi' $style
   'Desktop icon + Start menu'
 }
 
@@ -256,7 +293,7 @@ $checkName = 'Checking this PC'
 Emit 0 $checkName 'start'
 function Early-Fail([string]$msg) { Bad $msg; Emit 0 $checkName 'fail' $msg; Stop-Here 1 }
 $os = [Environment]::OSVersion.Version
-if ($os.Major -lt 10) { Early-Fail 'Aura-Slide needs Windows 10 or 11.' }
+if ($os.Major -lt 10) { Early-Fail 'Lumi needs Windows 10 or 11.' }
 $drive = (Split-Path -Qualifier $Root).TrimEnd(':')
 $free = [math]::Round((Get-PSDrive $drive).Free / 1GB, 1)
 if ($free -lt 3) { Early-Fail "Only $free GB free on drive $drive. Please free up at least 3 GB and run this again." }
@@ -280,7 +317,7 @@ for ($k = 0; $k -lt $total; $k++) {
   Emit ($k + 1) $s.n 'start'
   try {
     $r = & $s.f
-    if ($k -eq 0) { $Log = Join-Path $Logs "setup_$Stamp.log"; Log "Aura-Slide setup $($Config.version)  Windows $os  free $drive`: $free GB  GPU: $gpu  root: $Root" }
+    if ($k -eq 0) { $Log = Join-Path $Logs "setup_$Stamp.log"; Log "Lumi setup $($Config.version)  Windows $os  free $drive`: $free GB  GPU: $gpu  root: $Root" }
     $s.r = [string]$r; Log ("OK  " + $s.n + ' : ' + $r)
     if ($s.r -eq 'HAVE') { Emit ($k + 1) $s.n 'have' 'already on this PC' } else { Emit ($k + 1) $s.n 'ok' $s.r }
   } catch {
@@ -296,20 +333,37 @@ foreach ($s in $Steps) { if ($s.r -eq 'HAVE') { Skip $s.n } elseif ($s.r -like '
 Line ''
 if ($failed.Count) {
   Line '  Some parts did not install. Run the setup again - it continues where it stopped.' 'Yellow'
-  Line '  Still stuck? Open your Aura-Slide folder and double-click "Send problem report".' 'Yellow'
+  Line '  Still stuck? Open your Lumi folder and double-click "Send problem report".' 'Yellow'
   Line ''; Stop-Here 1
 }
 Line ('  All done!  Your folder:  ' + $Root) 'Green'
-Line '  Next time, open Aura-Slide with the "Aura-Slide" icon on your Desktop.' 'Green'
+Line '  Next time, open Lumi with the "Lumi" icon on your Desktop.' 'Green'
+if ($MovedFrom) {
+  Line ('  Your files were copied from ' + $MovedFrom + '.') 'Yellow'
+  Line '  Once you have checked them in the new folder, you can delete that old folder.' 'Yellow'
+}
 Line ''
 Line '  What happens now:' 'White'
-Line '    1. Aura-Slide opens in its own window. Answer the questions and drop in your files.'
+Line '    1. Lumi opens in its own window. Answer the questions and drop in your files.'
 Line '    2. Click   make my slides   at the end. The first time, sign in to Claude when asked.' 'Cyan'
 Line '    3. Watch Claude build your slides, and answer its questions in the chat.'
 Line ''
 if (-not $NoLaunch) {
-  $app = Join-Path $Aura 'AuraSlide.exe'
+  $app = Join-Path $Aura 'Lumi.exe'
   if (Test-Path $app) { Start-Process -FilePath $app } else { & (Join-Path $Aura 'engine\form.ps1') }
+} elseif ($FromOldApp) {
+  # The old Aura-Slide app opens whatever server answers on its port once this ends, so start Lumi's server here:
+  # it then opens the new app (in C:\Lumi) instead of the old one.
+  $pyw = Join-Path $Aura 'venv\Scripts\pythonw.exe'; $srv = Join-Path $Aura 'engine\form_server.py'
+  if ((Test-Path $pyw) -and (Test-Path $srv)) {
+    try {
+      Start-Process -FilePath $pyw -ArgumentList ('"' + $srv + '"') -WorkingDirectory (Join-Path $Aura 'engine') -WindowStyle Hidden
+      for ($i = 0; $i -lt 60; $i++) {
+        try { Invoke-WebRequest ('http://127.0.0.1:' + $Config.formPort + '/api/ping') -UseBasicParsing -TimeoutSec 2 | Out-Null; break }
+        catch { Start-Sleep -Milliseconds 500 }
+      }
+    } catch { Log ('could not start the Lumi server: ' + $_.Exception.Message) }
+  }
 }
 if (-not $Json) { Read-Host '  Press Enter to close this window' | Out-Null }
 exit 0

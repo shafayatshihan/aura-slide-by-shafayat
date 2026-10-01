@@ -1,4 +1,4 @@
-/* Aura-Slide Studio v0.3: routes (loading, home, editor), the usage pill, choice/hint chips and the editor chat bits.
+/* Lumi v0.3: routes (loading, home, editor), the usage pill, choice/hint chips and the editor chat bits.
    Same tokens and rules as app.css: flat pills on --pill, ink-inverted selection, no shadows or UI gradients. */
 
 /* ---------------------------------------------------------------- routes */
@@ -108,6 +108,11 @@
 .hm-new-t{display:flex;flex-direction:column;gap:4px;min-width:0}
 .hm-new-h{font-family:var(--head);font-weight:900;font-size:24px;line-height:1.05;letter-spacing:-.015em}
 .hm-new-s{font-size:14px;line-height:1.35;color:rgba(247,248,250,.72)}
+.hm-cont{margin-top:12px;width:344px;display:flex;flex-direction:column;gap:3px;padding:12px 18px;border-radius:20px;background:var(--white);color:var(--ink);text-align:left;border:2px solid var(--lilac);transition:transform .3s var(--ease)}
+.hm-cont:hover{transform:translateY(-2px)}
+.hm-cont:active{transform:scale(.97)}
+.hm-cont-h{font-family:var(--head);font-weight:900;font-size:17px;line-height:1.1}
+.hm-cont-s{font-size:13px;line-height:1.35;color:var(--mute)}
 
 .hm-right{position:absolute;left:500px;top:112px;width:1004px;height:738px}
 .hm-grid{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:300px;gap:24px 22px;height:624px;align-content:start}

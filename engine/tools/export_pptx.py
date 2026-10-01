@@ -24,7 +24,7 @@ def render(deck: Path):
     out = (root / '.aura' / 'temp' / 'export' / deck.stem) if root else deck.parent / ('_' + deck.stem + '_slides')
     node = shutil.which('node')
     if not node:
-        raise SystemExit('Node.js is missing, so the slides cannot be rendered. Run "Update Aura-Slide".')
+        raise SystemExit('Node.js is missing, so the slides cannot be rendered. Run "Update Lumi".')
     r = subprocess.run([node, str(TOOLS / 'shoot_slides.js'), str(deck), str(out)], capture_output=True, text=True, encoding='utf-8', errors='replace')
     if r.returncode != 0:
         raise SystemExit((r.stderr or r.stdout).strip() or 'Rendering the slides failed.')
@@ -71,7 +71,7 @@ def main():
             slide.notes_slide.notes_text_frame.text = s['notes']
             notes_count += 1
     prs.core_properties.title = meta.get('title') or deck.stem
-    prs.core_properties.author = 'Aura-Slide by Shafayat'
+    prs.core_properties.author = 'Lumi'
     tmp = out.with_name(out.name + '.part')
     prs.save(tmp)
     tmp.replace(out)

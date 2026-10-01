@@ -1,4 +1,4 @@
-"""Aura-Slide Studio server. Serves the web app on http://127.0.0.1:<port>/ (this PC only), saves the brief to
+"""Lumi server. Serves the web app on http://127.0.0.1:<port>/ (this PC only), saves the brief to
 .aura/brief/brief.json plus a readable brief.md for Claude, takes file uploads into "3 - Put your files here", and
 runs Claude in the background to build the slides (live events for the page, kept under .aura/temp).
 v0.3: a deck library (.aura/decks/<id>.json, /api/decks..., /deck/<id>/ previews, slide pictures, direct text tweaks
@@ -63,11 +63,11 @@ MIME = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=ut
 STATIC = {'css': FORM / 'css', 'js': FORM / 'js', 'assets': FORM / 'assets', 'themes': FORM / 'themes', 'fonts': FONTS}
 THREE_FILES = ('three.module.js', 'three.core.js')
 
-WEB_PROMPT = ('You are running inside the Aura-Slide web app, not a terminal. The person reads your messages in a chat '
+WEB_PROMPT = ('You are running inside the Lumi web app, not a terminal. The person reads your messages in a chat '
               'panel and is not technical: keep messages short, friendly and plain, no code. Use the aura-slide skill '
               'progress markers. When you need an answer, ask one clear question, put [[aura:ask]] on its own line, '
               'and end your turn.')
-FIRST_MESSAGE = ('show your aura\n\n[from-web] Started from the Aura-Slide web app. The brief is saved and the user '
+FIRST_MESSAGE = ('show your aura\n\n[from-web] Started from the Lumi web app. The brief is saved and the user '
                  'reviewed it, so skip the confirmation step and build the slides.')
 AUTH_RE = re.compile(r'not logged in|please run /login|run\s+/login|invalid api key|authentication[_ ]error|'
                      r'oauth token (has )?expired|token has expired|please log ?in|login required|not authenticated', re.I)
@@ -489,7 +489,7 @@ def friendly_rule_reason(out):
     m = re.findall(r'([\d.]+)px\s+"([^"]*)"', out or '')
     if m:
         px, txt = m[0]
-        return (f'That text would end up {px} px, and Aura-Slide keeps every text at 26 px or bigger so it can be read '
+        return (f'That text would end up {px} px, and Lumi keeps every text at 26 px or bigger so it can be read '
                 f'from the back of the room. Try fewer words, or ask Claude to rework the slide.')
     return 'The change did not pass the slide check, so it was undone. ' + (out.splitlines()[0][:200] if out else '')
 
@@ -723,7 +723,7 @@ class Runner:
         except OSError:
             pass
         if st.get('running'):   # the server stopped while Claude was working
-            self.add('error', 'Aura-Slide was closed while Claude was working. Send a message to carry on, or start again.',
+            self.add('error', 'Lumi was closed while Claude was working. Send a message to carry on, or start again.',
                      code='interrupted')
             self.save()
 
@@ -1075,7 +1075,7 @@ def latest_release():
         if m:
             try:
                 r = urllib.request.Request(f'https://api.github.com/repos/{m.group(1)}/{m.group(2).removesuffix(".git")}/releases/latest',
-                                           headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'Aura-Slide'})
+                                           headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'Lumi'})
                 with urllib.request.urlopen(r, timeout=4) as resp:
                     tag = json.loads(resp.read().decode('utf-8')).get('tag_name')
             except Exception as e:
@@ -1103,13 +1103,13 @@ def check_engine():
     fonts = len(list(FONTS.glob('*.woff2'))) if FONTS.is_dir() else 0
     if fonts == 0: missing.append('fonts')
     ok = not missing
-    return _chk('engine', ok, 'Aura-Slide files are all here' if ok else 'Some Aura-Slide files are missing',
+    return _chk('engine', ok, 'Lumi files are all here' if ok else 'Some Lumi files are missing',
                 f'{fonts} fonts' if ok else 'Missing: ' + ', '.join(missing[:5]), 'update')
 
 
 def check_node():
     node = node_exe()
-    if not node: return _chk('node', False, 'Node.js is missing', 'Aura-Slide uses Node.js to check and export slides.', 'update')
+    if not node: return _chk('node', False, 'Node.js is missing', 'Lumi uses Node.js to check and export slides.', 'update')
     try:
         v = subprocess.run([node, '--version'], capture_output=True, timeout=15, stdin=subprocess.DEVNULL,
                            creationflags=NO_WINDOW).stdout.decode('utf-8', 'replace').strip()
@@ -1138,7 +1138,7 @@ def check_edge():
 def check_python():
     pkgs = [str(p) for p in CFG.get('pythonPackages') or []]
     if not VENV_PY.is_file():
-        return _chk('python', False, 'The slide export tools need installing', 'Aura-Slide’s private Python is missing.', 'pip')
+        return _chk('python', False, 'The slide export tools need installing', 'Lumi’s private Python is missing.', 'pip')
     mods = [PY_MODULES.get(p.lower(), p.replace('-', '_')) for p in pkgs]
     code = 'import importlib.util as u, json, sys; print(json.dumps({m: bool(u.find_spec(m)) for m in sys.argv[1:]}))'
     try:
@@ -1146,7 +1146,7 @@ def check_python():
                            creationflags=NO_WINDOW)
         found = json.loads(r.stdout.decode('utf-8', 'replace').strip().splitlines()[-1])
     except Exception:
-        return _chk('python', False, 'The slide export tools need repairing', 'Aura-Slide’s private Python does not start.', 'pip')
+        return _chk('python', False, 'The slide export tools need repairing', 'Lumi’s private Python does not start.', 'pip')
     missing = [p for p, m in zip(pkgs, mods) if not found.get(m)]
     return _chk('python', not missing, 'Export tools are installed' if not missing else 'Some export tools are missing',
                 ', '.join(pkgs) if not missing else 'Missing: ' + ', '.join(missing), 'pip')
@@ -1155,7 +1155,7 @@ def check_python():
 def check_claude():
     cmd = claude_cmd()
     cli = _chk('claude', cmd, 'Claude is installed' if cmd else 'Claude is not installed',
-               '' if cmd else 'Aura-Slide needs the Claude app (Claude Code) to make slides.', 'update')
+               '' if cmd else 'Lumi needs the Claude app (Claude Code) to make slides.', 'update')
     if not cmd:
         return [cli, _chk('signin', False, 'Sign in to Claude', 'Install Claude first.', None)]
     signed = RUNNER.signed_in(refresh=True)
@@ -1165,7 +1165,7 @@ def check_claude():
     elif not signed:
         si = _chk('signin', False, 'Sign in to Claude', 'Use the Claude account with your Pro, Max or Team plan.', 'signin')
     elif plan and plan.lower() not in PREMIUM_PLANS:
-        si = _chk('signin', False, 'Aura-Slide needs a Claude Pro, Max or Team plan',
+        si = _chk('signin', False, 'Lumi needs a Claude Pro, Max or Team plan',
                   f'You are signed in with a {plan} plan. Upgrade at claude.ai, or sign in with another account.', 'signin')
     else:
         si = _chk('signin', True, 'Signed in to Claude', f'{plan.capitalize()} plan' if plan else 'signed in')
@@ -1187,7 +1187,7 @@ def check_version():
     mine = CFG.get('version')
     latest = latest_release()
     newer = bool(latest and version_tuple(latest) and version_tuple(mine) and version_tuple(latest) > version_tuple(mine))
-    c = _chk('version', not newer, f'A new version is ready ({str(latest).lstrip("v")})' if newer else 'Aura-Slide is up to date',
+    c = _chk('version', not newer, f'A new version is ready ({str(latest).lstrip("v")})' if newer else 'Lumi is up to date',
              f'you have {mine}' + ('' if latest else ' (could not check for updates)'), 'update', blocking=False)
     c.update(version=mine, latest=latest)
     return c
@@ -1237,7 +1237,7 @@ class Fixer:
             return [([sys.executable, '-c', code], ENGINE)]
         if name == 'npm':
             npm = shutil.which('npm.cmd') or shutil.which('npm')
-            if not npm: raise RuntimeError('Node.js (npm) is missing. Use "Update Aura-Slide" instead.')
+            if not npm: raise RuntimeError('Node.js (npm) is missing. Use "Update Lumi" instead.')
             return [([npm, 'install', '--no-audit', '--no-fund', '--loglevel=error'], ENGINE)]
         if name == 'pip':
             steps = []
@@ -1289,10 +1289,10 @@ class Fixer:
 
 
 def fix_update():
-    exe = AURA / 'AuraSlide.exe'
+    exe = AURA / 'Lumi.exe'
     if not exe.is_file():
         return 404, {'ok': False, 'error': 'launcher-missing',
-                     'message': 'The Aura-Slide updater is not installed here. Download Aura-Slide again from the link you got.'}
+                     'message': 'The Lumi updater is not installed here. Download Lumi again from the link you got.'}
     if NO_LAUNCH: return 200, {'ok': True, 'launched': False}
     # detached and outside the job object, so it keeps going when it restarts this server
     flags = getattr(subprocess, 'DETACHED_PROCESS', 0) | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
@@ -1329,7 +1329,7 @@ def find_vscode():
 # ---------------------------------------------------------------- HTTP
 class H(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
-    server_version = 'AuraSlide/2'
+    server_version = 'Lumi/2'
     sys_version = ''
 
     def log_message(self, *a): pass
@@ -1737,7 +1737,7 @@ def main():
         print(f'port {PORT} is busy', file=sys.stderr)
         sys.exit(2)
     threading.Thread(target=reaper, args=(srv,), daemon=True).start()
-    print(f'Aura-Slide studio on http://127.0.0.1:{PORT}/  (home: {AURA})', flush=True)
+    print(f'Lumi on http://127.0.0.1:{PORT}/  (home: {AURA})', flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

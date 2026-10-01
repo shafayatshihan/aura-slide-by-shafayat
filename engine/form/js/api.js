@@ -1,4 +1,4 @@
-// Calls to the local Aura-Slide server (engine/form_server.py). Every call resolves; failures come back as {ok:false, error}.
+// Calls to the local Lumi server (engine/form_server.py). Every call resolves; failures come back as {ok:false, error}.
 async function req(method, url, body) {
   try {
     const r = await fetch(url, body === undefined ? { method } :

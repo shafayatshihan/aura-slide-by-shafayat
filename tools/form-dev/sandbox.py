@@ -1,4 +1,4 @@
-"""Developer-only: make (or refresh) a throwaway Aura-Slide folder for testing the REAL form server and Claude runner
+"""Developer-only: make (or refresh) a throwaway Lumi folder for testing the REAL form server and Claude runner
 without touching a real installation. Default location X:\\aura-dev (pass another path as the first argument).
   python tools/form-dev/sandbox.py [X:\\aura-dev] [--reset]
 Then run the server against it:

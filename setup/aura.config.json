@@ -1,8 +1,8 @@
 {
-  "name": "Aura-Slide by Shafayat",
-  "version": "0.3.1",
-  "repoUrl": "https://github.com/shafayatshihan/aura-slide-by-shafayat",
-  "releaseZip": "https://github.com/shafayatshihan/aura-slide-by-shafayat/releases/latest/download/Aura-Slide-Setup.zip",
+  "name": "Lumi",
+  "version": "0.4.0",
+  "repoUrl": "https://github.com/shafayatshihan/lumi",
+  "releaseZip": "https://github.com/shafayatshihan/lumi/releases/latest/download/Lumi-Setup.zip",
   "pythonPackages": [
     "pillow",
     "python-pptx",

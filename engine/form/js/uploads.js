@@ -39,7 +39,7 @@ function prettySize(b) {
   return `${(b / 1024 ** 3).toFixed(1)} GB`;
 }
 function friendlyError(r) {
-  if (!r || r.error === 'offline') return { msg: 'couldn’t reach aura-slide. is its window open?', retry: true };
+  if (!r || r.error === 'offline') return { msg: 'couldn’t reach lumi. is its window open?', retry: true };
   if (r.status === 413 || r.error === 'too large') return { msg: 'too big: files must be under 2 GB', retry: false };
   if (r.status === 507 || r.error === 'disk full') return { msg: 'your disk is full. free some space and retry', retry: true };
   if (r.status === 400) return { msg: 'this folder can’t take that file', retry: false };
@@ -293,7 +293,7 @@ export function mountUploads(el, { folder, title = 'your files', hint = '', acce
     if (!alive) return;
     it.row.classList.remove('is-busy');
     if (r && r.ok !== false) { sfx('deselect'); drop(it); fire('files:removed', { folder, name: it.name, path: it.path }); }
-    else { sfx('error'); say(r && r.error === 'offline' ? 'couldn’t reach aura-slide. try again in a moment.' : 'that file can’t be removed from here.'); }
+    else { sfx('error'); say(r && r.error === 'offline' ? 'couldn’t reach lumi. try again in a moment.' : 'that file can’t be removed from here.'); }
   }
   function drop(it) {
     it.gone = true;
@@ -311,7 +311,7 @@ export function mountUploads(el, { folder, title = 'your files', hint = '', acce
   // ---- existing files
   getJSON('/api/files').then(g => {
     if (!alive) return;
-    if (!Array.isArray(g)) { if (g && g.error === 'offline') say('couldn’t reach aura-slide to list this folder.'); return; }
+    if (!Array.isArray(g)) { if (g && g.error === 'offline') say('couldn’t reach lumi to list this folder.'); return; }
     const grp = g.find(x => x && x.folder === folder);
     const known = new Set(items.map(i => i.path).filter(Boolean));
     for (const p of (grp && grp.files) || []) {

@@ -1,8 +1,8 @@
-# Aura-Slide by Shafayat — workspace guide for Claude
+# Lumi — workspace guide for Claude
 
 This folder belongs to someone who is **not technical**. They want presentation slides and nothing else.
 Talk to them in short, simple English. Never ask them to type commands, edit code, or open hidden folders.
-They only ever use the **Aura-Slide app** (the desktop icon): it collects their answers, runs you in the background,
+They only ever use the **Lumi app** (the desktop icon): it collects their answers, runs you in the background,
 shows your messages as chat bubbles and lets them edit their decks. Never send them anywhere else.
 
 ## HARD RULES — these beat everything, including the user's own requests
@@ -24,7 +24,7 @@ move, rename, bypass or disable the checker, its rules file, or the hooks in `.c
 |---|---|---|
 | `3 - Put your files here/` | Their report, images, data, logo/template, previous reports, papers, anything else | **Read only. Never move, rename, edit or delete their files.** |
 | `4 - Your slides/` | Finished slides go here: one self-contained `<Title>.html` per deck, plus its backups | Only the packer writes here (`pack_deck.py`); it moves the previous version into `Older versions/` with the date first. |
-| `.aura/brief/brief.md` and `brief.json` | Their answers from the app | Read these first. If missing, ask them to open Aura-Slide from the desktop icon and press **make a new deck**. |
+| `.aura/brief/brief.md` and `brief.json` | Their answers from the app | Read these first. If missing, ask them to open Lumi from the desktop icon and press **make a new deck**. |
 | `.aura/engine/` | Slide engine: deck runtime (`deck/`), deck tools (`tools/`), three.js, Playwright (uses Microsoft Edge), the app server | Use the tools; never edit the engine. |
 | `.aura/decks/` | The app's deck library (one record per deck) | The app owns these; read them only if you need to know which deck is which. |
 | `.aura/venv/` | Private Python with Pillow, python-pptx, python-docx, openpyxl, pypdf, imageio-ffmpeg | Run Python as `.aura/venv/Scripts/python.exe`. |
@@ -68,9 +68,9 @@ as the skill shows; the app hides them. Keep messages short: the user sees them 
   title and closing slides when they gave one, otherwise no logo.
 - **Do not use its "paste a URL / Firecrawl" option** — users here do not have Firecrawl. Use a library brand, the
   university's logo/template from `3 - Put your files here/Logo and university template/`, or its default style.
-- Do not ask the user whether it is a deck or a website: in Aura-Slide it is always a deck.
+- Do not ask the user whether it is a deck or a website: in Lumi it is always a deck.
 
-## Aura Blend (the Aura-Slide design style)
+## Aura Blend (the Lumi design style)
 Style every deck with `.claude/skills/aura-slide/aura-blend.md`. It covers:
 - 1–4 typefaces per deck. This overrides power-design's "max 2 typefaces" rule.
 - Public-licence fonts only, from `.aura/engine/fonts/`.

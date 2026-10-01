@@ -1,17 +1,17 @@
-// Aura-Slide by Shafayat - the one Windows program people download (shared by a Drive link).
+// Lumi - the one Windows program people download (shared by a Drive link).
 //
 // One WinForms .exe, .NET Framework 4.x only, no admin rights, C# 5 (built by tools/build_exe.py with the csc.exe that
 // ships inside Windows). It has three jobs:
 //
-//   install   run from anywhere except <root>\.aura\AuraSlide.exe: a friendly window downloads the newest release zip
+//   install   run from anywhere except <root>\.aura\Lumi.exe: a friendly window downloads the newest release zip
 //             from GitHub, unpacks it in %TEMP%, runs its setup\setup.ps1 -Json -NoLaunch hidden and turns the JSON
 //             progress lines into a step list. setup.ps1 makes the folders and shortcuts; this program then puts a
-//             copy of itself at <root>\.aura\AuraSlide.exe (when it is newer) and opens the app.
+//             copy of itself at <root>\.aura\Lumi.exe (when it is newer) and opens the app.
 //   launch    the installed copy with no arguments (what the Desktop icon runs): start engine\form_server.py with a
-//             working pythonw, wait for /api/ping, open Edge as an app window, exit. Problems -> "Repair Aura-Slide".
+//             working pythonw, wait for /api/ping, open Edge as an app window, exit. Problems -> "Repair Lumi".
 //   --update  / --repair: the install steps again (user folders are always kept), then the app opens again.
 //
-// <root> is C:\Aura-Slide by Shafayat. Developer overrides (environment variables):
+// <root> is C:\Lumi. Developer overrides (environment variables):
 //   AURA_ROOT          install somewhere else (setup.ps1 then puts the shortcuts inside that folder)
 //   AURA_ZIP           a local zip (or another URL) instead of the GitHub release
 //   AURA_SHOTS         a folder: every screen state is saved there as a PNG
@@ -37,7 +37,7 @@ using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-namespace AuraSlide
+namespace Lumi
 {
     enum Mode { Install, AlreadyInstalled, Problem, Update, Repair }
 
@@ -47,7 +47,7 @@ namespace AuraSlide
     static class Program
     {
         public const string DefaultZip =
-            "https://github.com/shafayatshihan/aura-slide-by-shafayat/releases/latest/download/Aura-Slide-Setup.zip";
+            "https://github.com/shafayatshihan/lumi/releases/latest/download/Lumi-Setup.zip";
 
         [STAThread]
         static int Main(string[] args)
@@ -57,7 +57,7 @@ namespace AuraSlide
             Application.SetCompatibleTextRenderingDefault(false);
             using (Graphics g = Graphics.FromHwnd(IntPtr.Zero)) Theme.S = Math.Max(1f, g.DpiX / 96f);
             Paths.Init();
-            Log.W("AuraSlide " + Program.Version() + "  self: " + Paths.Self + "  root: " + Paths.Root +
+            Log.W("Lumi " + Program.Version() + "  self: " + Paths.Self + "  root: " + Paths.Root +
                   "  args: " + string.Join(" ", args));
 
             bool update = HasArg(args, "--update"), repair = HasArg(args, "--repair");
@@ -83,11 +83,11 @@ namespace AuraSlide
         static int RunInstaller(Mode mode, string reason)
         {
             bool fresh;
-            using (Mutex m = new Mutex(true, "AuraSlide-Installer", out fresh))
+            using (Mutex m = new Mutex(true, "Lumi-Installer", out fresh))
             {
                 if (!fresh)
                 {
-                    MessageBox.Show("Aura-Slide is already being set up in another window.", "Aura-Slide",
+                    MessageBox.Show("Lumi is already being set up in another window.", "Lumi",
                                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return 1;
                 }
@@ -105,9 +105,9 @@ namespace AuraSlide
 
         public static void RelaunchFromTemp(string arg)
         {
-            string dir = Path.Combine(Path.GetTempPath(), "AuraSlide-run");
+            string dir = Path.Combine(Path.GetTempPath(), "Lumi-run");
             Directory.CreateDirectory(dir);
-            string copy = Path.Combine(dir, "AuraSlide.exe");
+            string copy = Path.Combine(dir, "Lumi.exe");
             File.Copy(Paths.Self, copy, true);
             ProcessStartInfo psi = new ProcessStartInfo(copy, arg);
             psi.UseShellExecute = false;
@@ -149,7 +149,7 @@ namespace AuraSlide
     // ------------------------------------------------------------------------------------------------ paths, config, log
     static class Paths
     {
-        public const string DefaultRoot = @"C:\Aura-Slide by Shafayat";
+        public const string DefaultRoot = @"C:\Lumi";
         public static string Self, SelfDir, Root, Aura, Engine, InstalledExe, Logs;
 
         public static void Init()
@@ -164,7 +164,7 @@ namespace AuraSlide
             Aura = Path.Combine(Root, ".aura");
             Engine = Path.Combine(Aura, "engine");
             Logs = Path.Combine(Aura, "logs");
-            InstalledExe = Path.Combine(Aura, "AuraSlide.exe");
+            InstalledExe = Path.Combine(Aura, "Lumi.exe");
         }
         public static bool SelfIsInstalled { get { return string.Equals(Self, InstalledExe, StringComparison.OrdinalIgnoreCase); } }
         public static bool IsInstalled
@@ -205,7 +205,7 @@ namespace AuraSlide
     static class Log
     {
         public static readonly string File = Path.Combine(Path.GetTempPath(),
-            "AuraSlide_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture) + ".log");
+            "Lumi_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture) + ".log");
         static readonly object Lock = new object();
         public static void W(string m)
         {
@@ -221,7 +221,7 @@ namespace AuraSlide
             {
                 if (!Directory.Exists(Paths.Aura)) return;     // nothing installed yet: do not make the folder
                 Directory.CreateDirectory(Paths.Logs);
-                System.IO.File.Copy(File, Path.Combine(Paths.Logs, "app_" + Path.GetFileName(File).Substring(10)), true);
+                System.IO.File.Copy(File, Path.Combine(Paths.Logs, "app_" + Path.GetFileName(File).Substring(5)), true);
             }
             catch { }
         }
@@ -273,7 +273,7 @@ namespace AuraSlide
 
         public static Image Res(string name)
         {
-            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream("AuraSlide." + name))
+            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream("Lumi." + name))
             {
                 if (s == null) return null;
                 using (Image i = Image.FromStream(s)) return new Bitmap(i);
@@ -283,7 +283,7 @@ namespace AuraSlide
         {
             try
             {
-                using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream("AuraSlide.aura-slide.ico"))
+                using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream("Lumi.lumi.ico"))
                     if (s != null) return new Icon(s);
             }
             catch { }
@@ -577,7 +577,7 @@ namespace AuraSlide
             return null;
         }
 
-        // An Aura-Slide server still running (an update replaces its files, an old one has no api version): stop it.
+        // An Lumi server still running (an update replaces its files, an old one has no api version): stop it.
         public static void StopServer(int port)
         {
             string cmd = "$o = Get-NetTCPConnection -LocalPort " + port + " -State Listen -ErrorAction SilentlyContinue | " +
@@ -700,9 +700,9 @@ namespace AuraSlide
 
         public static string ProblemText(string code)
         {
-            if (code == "python") return "Aura-Slide could not find a working Python on this Windows account.";
-            if (code == "engine") return "Some Aura-Slide files are missing from your Aura-Slide folder.";
-            return "The small Aura-Slide helper that runs in the background did not start.";
+            if (code == "python") return "Lumi could not find a working Python on this Windows account.";
+            if (code == "engine") return "Some Lumi files are missing from your Lumi folder.";
+            return "The small Lumi helper that runs in the background did not start.";
         }
     }
 
@@ -725,7 +725,7 @@ namespace AuraSlide
                 string brief = Path.Combine(Paths.Aura, @"brief\brief.json");
                 if (File.Exists(brief)) { try { File.Copy(brief, Path.Combine(tmp, "brief.json"), true); } catch { } }
                 StringBuilder sb = new StringBuilder();
-                sb.AppendLine("Aura-Slide report  " + DateTime.Now.ToString("u", CultureInfo.InvariantCulture));
+                sb.AppendLine("Lumi report  " + DateTime.Now.ToString("u", CultureInfo.InvariantCulture));
                 sb.AppendLine("App      " + Program.Version() + "  " + Paths.Self);
                 sb.AppendLine("Windows  " + Environment.OSVersion.VersionString + (Environment.Is64BitOperatingSystem ? " 64-bit" : " 32-bit"));
                 try { DriveInfo di = new DriveInfo(Path.GetPathRoot(Paths.Root)); sb.AppendLine("Free     " + (di.AvailableFreeSpace / 1e9).ToString("0.0", CultureInfo.InvariantCulture) + " GB on " + di.Name); } catch { }
@@ -746,7 +746,7 @@ namespace AuraSlide
                 // a developer test install keeps the report in its own folder instead of the real Desktop
                 string destDir = Paths.TestRoot && Directory.Exists(Paths.Root) ? Paths.Root
                                : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-                string zip = Path.Combine(destDir, "Aura-Slide problem report " + stamp + ".zip");
+                string zip = Path.Combine(destDir, "Lumi problem report " + stamp + ".zip");
                 if (File.Exists(zip)) File.Delete(zip);
                 ZipFile.CreateFromDirectory(tmp, zip);
                 if (!Paths.TestRoot) Process.Start("explorer.exe", "/select,\"" + zip + "\"");
@@ -762,7 +762,7 @@ namespace AuraSlide
         public string Problem;          // null = the app window is opening
         public SplashForm()
         {
-            Text = "Aura-Slide"; Icon = Theme.AppIcon();
+            Text = "Lumi"; Icon = Theme.AppIcon();
             FormBorderStyle = FormBorderStyle.None; StartPosition = FormStartPosition.CenterScreen;
             BackColor = Theme.Bg; ClientSize = new Size(Theme.P(420), Theme.P(330)); ShowInTaskbar = true;
             Image img = Theme.Res("character.jpg");
@@ -773,7 +773,7 @@ namespace AuraSlide
             Spinner sp = new Spinner(); sp.Bounds = new Rectangle(Theme.P(118), Theme.P(262), Theme.P(28), Theme.P(28));
             Controls.Add(sp);
             Label l = new Label();
-            l.Text = "Opening Aura-Slide..."; l.Font = Theme.Semi(14f); l.ForeColor = Theme.Ink; l.AutoSize = true;
+            l.Text = "Opening Lumi..."; l.Font = Theme.Semi(14f); l.ForeColor = Theme.Ink; l.AutoSize = true;
             l.Location = new Point(Theme.P(156), Theme.P(260)); l.BackColor = Color.Transparent;
             Controls.Add(l);
         }
@@ -832,7 +832,7 @@ namespace AuraSlide
         public InstallForm(Mode mode, string reason)
         {
             this.mode = mode; this.reason = reason;
-            Text = "Aura-Slide by Shafayat"; Icon = Theme.AppIcon();
+            Text = "Lumi"; Icon = Theme.AppIcon();
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen; BackColor = Theme.Bg; Font = Theme.F(11f);
             Rectangle wa = Screen.PrimaryScreen.WorkingArea;
@@ -871,16 +871,16 @@ namespace AuraSlide
 
         void BuildWelcome()
         {
-            Image logo = Theme.Res("aura-slide.png");
+            Image logo = Theme.Res("lumi.png");
             wLogo = new PictureBox(); wLogo.Image = logo; wLogo.SizeMode = PictureBoxSizeMode.Zoom; welcome.Controls.Add(wLogo);
-            wBrand = NewLabel(welcome, Theme.Semi(11.5f), Theme.Ink); wBrand.Text = "Aura-Slide by Shafayat";
+            wBrand = NewLabel(welcome, Theme.Semi(11.5f), Theme.Ink); wBrand.Text = "Lumi by Shafayat";
             wPic = new PictureBox(); wPic.Image = Theme.Res("character.jpg"); wPic.SizeMode = PictureBoxSizeMode.Zoom; welcome.Controls.Add(wPic);
             wTitle = NewLabel(welcome, Theme.B(24f), Theme.Ink); wTitle.TextAlign = ContentAlignment.MiddleCenter;
             wBody = NewLabel(welcome, Theme.F(13f), Theme.Ink); wBody.TextAlign = ContentAlignment.TopCenter;
             card = new RoundPanel(); welcome.Controls.Add(card);
             cardHead = NewLabel(card, Theme.Semi(11.5f), Theme.Ink); cardHead.BackColor = Theme.Card;
             cardText = NewLabel(card, Theme.F(11f), Theme.Muted); cardText.BackColor = Theme.Card;
-            wMain = new PillButton("Install Aura-Slide", true); welcome.Controls.Add(wMain);
+            wMain = new PillButton("Install Lumi", true); welcome.Controls.Add(wMain);
             wSecond = new PillButton("Not now", false); welcome.Controls.Add(wSecond);
             wMain.Click += delegate { OnWelcomeMain(); };
             wSecond.Click += delegate { OnWelcomeSecond(); };
@@ -892,30 +892,30 @@ namespace AuraSlide
             showCard = true;
             cardHead.Text = "Did Windows show a blue box saying \u201CWindows protected your PC\u201D?";
             cardText.Text = "That is normal for a free app that is not sold in a shop. Click \u201CMore info\u201D, then " +
-                            "\u201CRun anyway\u201D. While Aura-Slide installs, Windows may also ask \u201CDo you want to allow " +
+                            "\u201CRun anyway\u201D. While Lumi installs, Windows may also ask \u201CDo you want to allow " +
                             "this app to make changes?\u201D - click Yes.";
             if (mode == Mode.AlreadyInstalled)
             {
-                wTitle.Text = "Aura-Slide is already on this PC";
+                wTitle.Text = "Lumi is already on this PC";
                 wBody.Text = "Open it now, or install it again to get the newest version. Installing again keeps your files and slides.";
-                wMain.Text = "Open Aura-Slide"; wSecond.Text = "Install again";
+                wMain.Text = "Open Lumi"; wSecond.Text = "Install again";
                 showCard = false;
             }
             else if (mode == Mode.Problem)
             {
-                wTitle.Text = "Aura-Slide could not start";
-                wBody.Text = (reason ?? "Something is not right.") + " \u201CRepair Aura-Slide\u201D puts it right in a few minutes. " +
+                wTitle.Text = "Lumi could not start";
+                wBody.Text = (reason ?? "Something is not right.") + " \u201CRepair Lumi\u201D puts it right in a few minutes. " +
                              "Your files and slides stay where they are.";
-                wMain.Text = "Repair Aura-Slide"; wSecond.Text = "Send problem report";
+                wMain.Text = "Repair Lumi"; wSecond.Text = "Send problem report";
                 showCard = false;
             }
             else
             {
-                wTitle.Text = "Let\u2019s set up Aura-Slide";
-                wBody.Text = "It is free. Aura-Slide makes a folder for your files and slides on your C: drive and adds the free " +
+                wTitle.Text = "Let\u2019s set up Lumi";
+                wBody.Text = "It is free. Lumi makes a folder for your files and slides on your C: drive and adds the free " +
                              "tools it needs: Git, Node.js, Python and Claude Code. It takes 10 to 20 minutes, mostly downloading. " +
                              "To make slides you need a Claude Pro, Max or Team plan.";
-                wMain.Text = "Install Aura-Slide"; wSecond.Text = "Not now";
+                wMain.Text = "Install Lumi"; wSecond.Text = "Not now";
             }
             wMain.FitWidth(); wSecond.FitWidth();
             card.Visible = showCard;
@@ -966,7 +966,7 @@ namespace AuraSlide
 
         void BuildProgress()
         {
-            pLogo = new PictureBox(); pLogo.Image = Theme.Res("aura-slide.png"); pLogo.SizeMode = PictureBoxSizeMode.Zoom; progress.Controls.Add(pLogo);
+            pLogo = new PictureBox(); pLogo.Image = Theme.Res("lumi.png"); pLogo.SizeMode = PictureBoxSizeMode.Zoom; progress.Controls.Add(pLogo);
             pTitle = NewLabel(progress, Theme.B(20f), Theme.Ink);
             pSub = NewLabel(progress, Theme.F(11.5f), Theme.Muted);
             pPct = NewLabel(progress, Theme.Semi(11f), Theme.Ink); pPct.TextAlign = ContentAlignment.MiddleRight;
@@ -1057,12 +1057,12 @@ namespace AuraSlide
             {
                 string zip = Report.Make();
                 MessageBox.Show(this, "A problem report was saved:\n\n" + zip + "\n\nPlease send this file to Shafayat.",
-                                "Aura-Slide", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                "Lumi", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception e)
             {
                 Log.W("report: " + e);
-                MessageBox.Show(this, "The problem report could not be made: " + e.Message, "Aura-Slide", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "The problem report could not be made: " + e.Message, "Lumi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -1070,8 +1070,8 @@ namespace AuraSlide
         {
             if (running && e.CloseReason == CloseReason.UserClosing)
             {
-                DialogResult r = MessageBox.Show(this, "Aura-Slide is still being set up. Stop now?\n\nYou can run it again later - it carries on where it stopped.",
-                                                 "Aura-Slide", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+                DialogResult r = MessageBox.Show(this, "Lumi is still being set up. Stop now?\n\nYou can run it again later - it carries on where it stopped.",
+                                                 "Lumi", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
                 if (r != DialogResult.Yes) { e.Cancel = true; return; }
                 KillSetup();
             }
@@ -1109,12 +1109,12 @@ namespace AuraSlide
             welcome.Visible = false; progress.Visible = true;
             done = false; firstFail = null;
             steps.Rows.Clear();
-            AddRow("dl", "Download Aura-Slide");
+            AddRow("dl", "Download Lumi");
             AddRow("unzip", "Unpack it");
             AddRow("fin", "Finishing up");
             bar.Fill = Theme.Accent; bar.Value = 0; pPct.Text = "0%";
             SetButtons(false, false, false);
-            SetHeader(Verb() + " Aura-Slide",
+            SetHeader(Verb() + " Lumi",
                 "This takes 10 to 20 minutes and you can keep using your PC. If Windows asks \u201CDo you want to allow this " +
                 "app to make changes?\u201D, click Yes.");
             running = true;
@@ -1180,10 +1180,10 @@ namespace AuraSlide
         void Download()
         {
             SetRow("dl", RowState.Running, "");
-            string dir = Path.Combine(Path.GetTempPath(), "AuraSlide-setup");
+            string dir = Path.Combine(Path.GetTempPath(), "Lumi-setup");
             Directory.CreateDirectory(dir);
             if (zipReady && File.Exists(zipFile)) { SetRow("dl", RowState.Ok, "already downloaded"); return; }
-            zipFile = Path.Combine(dir, "Aura-Slide-Setup.zip");
+            zipFile = Path.Combine(dir, "Lumi-Setup.zip");
             string src = Program.Env("AURA_ZIP") ?? Cfg.ZipUrl();
             Log.W("download from " + src);
             if (!src.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !File.Exists(src))
@@ -1209,7 +1209,7 @@ namespace AuraSlide
                 catch (Exception e) { last = e; Log.W("download attempt " + attempt + ": " + e.Message); Thread.Sleep(1500 * attempt); }
             }
             SetRow("dl", RowState.Fail, "no connection");
-            throw new FriendlyException("Aura-Slide could not be downloaded. Check that this PC is connected to the internet.");
+            throw new FriendlyException("Lumi could not be downloaded. Check that this PC is connected to the internet.");
         }
 
         void Progress(long got, long len)
@@ -1231,7 +1231,7 @@ namespace AuraSlide
         {
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768;   // TLS 1.2 / 1.1
             HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
-            req.UserAgent = "AuraSlide/" + Program.Version();
+            req.UserAgent = "Lumi/" + Program.Version();
             req.Timeout = 30000; req.ReadWriteTimeout = 60000; req.AllowAutoRedirect = true;
             using (WebResponse resp = req.GetResponse())
             using (Stream s = resp.GetResponseStream())
@@ -1274,7 +1274,7 @@ namespace AuraSlide
         string Unpack()
         {
             SetRow("unzip", RowState.Running, "");
-            workDir = Path.Combine(Path.GetTempPath(), "AuraSlide-setup", "files");
+            workDir = Path.Combine(Path.GetTempPath(), "Lumi-setup", "files");
             try
             {
                 if (Directory.Exists(workDir)) Directory.Delete(workDir, true);
@@ -1294,7 +1294,7 @@ namespace AuraSlide
                     return f;
                 }
             SetRow("unzip", RowState.Fail, "setup missing");
-            throw new FriendlyException("The download did not contain the Aura-Slide setup.");
+            throw new FriendlyException("The download did not contain the Lumi setup.");
         }
 
         string RunSetup(string setup)
@@ -1313,7 +1313,7 @@ namespace AuraSlide
             catch (Exception e)
             {
                 Log.W("powershell: " + e);
-                throw new FriendlyException("Windows PowerShell could not start on this PC, so Aura-Slide cannot be set up.");
+                throw new FriendlyException("Windows PowerShell could not start on this PC, so Lumi cannot be set up.");
             }
             setupProc = p;
             StringBuilder err = new StringBuilder();
@@ -1415,7 +1415,7 @@ namespace AuraSlide
         void Finish()
         {
             SetRow("fin", RowState.Running, "");
-            // setup.ps1 already put this release's AuraSlide.exe in place; a newer copy (this one) replaces it.
+            // setup.ps1 already put this release's Lumi.exe in place; a newer copy (this one) replaces it.
             try
             {
                 Version mine = Program.Version(), theirs = null;
@@ -1435,7 +1435,7 @@ namespace AuraSlide
             if (!File.Exists(Paths.InstalledExe))
             {
                 SetRow("fin", RowState.Fail, "app missing");
-                throw new FriendlyException("The Aura-Slide app could not be copied into your Aura-Slide folder.");
+                throw new FriendlyException("The Lumi app could not be copied into your Lumi folder.");
             }
             SetRow("fin", RowState.Ok, "Desktop icon ready");
         }
@@ -1456,8 +1456,8 @@ namespace AuraSlide
             done = true;
             bar.Value = 1; bar.Fill = Theme.Good; pPct.Text = "100%";
             SetButtons(false, false, false);
-            SetHeader(mode == Mode.Update ? "Aura-Slide is up to date" : "Aura-Slide is ready",
-                "Opening it now. Next time, double-click the Aura-Slide icon on your Desktop.");
+            SetHeader(mode == Mode.Update ? "Lumi is up to date" : "Lumi is ready",
+                "Opening it now. Next time, double-click the Lumi icon on your Desktop.");
             Shot("done");
             LaunchApp();
         }
@@ -1481,7 +1481,7 @@ namespace AuraSlide
                     }
                     pMain.Text = "Try opening again";
                     SetButtons(true, true, true);
-                    SetHeader("Aura-Slide is installed, but did not open", Launcher.ProblemText(problem) +
+                    SetHeader("Lumi is installed, but did not open", Launcher.ProblemText(problem) +
                               " Click Try opening again. If it still does not open, click Send problem report.");
                     Shot("launch-failed");
                     AutoClose();

@@ -1,11 +1,11 @@
-# Aura Blend — how Aura-Slide styles a deck
+# Aura Blend — how Lumi styles a deck
 
 Aura Blend sits on top of power-design. Power-design's 20 slide rules still apply, except for the one override below.
 The HARD RULES in `.claude/CLAUDE.md` (no text under 26 px) beat everything.
 Aura Blend adds three things: a type blend, a colour blend, and one signature style device per theme.
 
 ## Override of power-design's Font Pairing rule
-The downloaded power-design rulebook says "maximum 2 typefaces per deck". **In Aura-Slide the limit is 4.**
+The downloaded power-design rulebook says "maximum 2 typefaces per deck". **In Lumi the limit is 4.**
 This is the owner's rule, and it applies in this folder even though the rulebook file says 2.
 
 ## 1. Type: up to four voices, one job each

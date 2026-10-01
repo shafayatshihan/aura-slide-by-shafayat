@@ -122,7 +122,7 @@ if (!title) {
 }
 if (!THEMES[theme]) { console.error('Unknown theme "' + theme + '". Use one of: ' + Object.keys(THEMES).join(', ')); process.exit(1); }
 const root = findAuraRoot(process.cwd());
-if (!root) { console.error('Run this from the Aura-Slide folder (the one that contains .aura).'); process.exit(1); }
+if (!root) { console.error('Run this from the Lumi folder (the one that contains .aura).'); process.exit(1); }
 
 const slug = (slugArg || title).toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '-').slice(0, 48) || 'deck';
 const dir = path.join(root, '.aura', 'temp', 'build', slug);

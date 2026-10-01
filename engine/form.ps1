@@ -1,5 +1,5 @@
-# Opens the Aura-Slide Studio web app. Starts the small local server first if it is not running.
-# Fallback launcher: the Desktop icon runs .aura\AuraSlide.exe, which does the same.
+# Opens the Lumi web app. Starts the small local server first if it is not running.
+# Fallback launcher: the Desktop icon runs .aura\Lumi.exe, which does the same.
 # The server only listens on this PC (127.0.0.1), saves answers into .aura\brief and runs Claude in the background.
 # The server needs plain Python only (no extra packages), so if Aura's private Python (.aura\venv) was made by another
 # Windows account and no longer works here, any working Python on this account is used instead.
@@ -29,7 +29,7 @@ function Find-Pythonw {
   return $null
 }
 function Stop-OldServer {
-  # An older Aura-Slide form server (from before the web app) answers ping without an api version: replace it.
+  # An older form server (from before the web app) answers ping without an api version: replace it.
   $owner = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess
   if (-not $owner) { return }
   $proc = Get-Process -Id $owner -ErrorAction SilentlyContinue
@@ -44,10 +44,10 @@ if ($ping -and -not $ping.api) { Stop-OldServer; $ping = Ping }
 if (-not $ping) {
   $pyw = Find-Pythonw
   if (-not $pyw) {
-    $app = Join-Path $Aura 'AuraSlide.exe'
+    $app = Join-Path $Aura 'Lumi.exe'
     if (Test-Path $app) { Start-Process -FilePath $app -ArgumentList '--repair'; exit 1 }   # the app explains and repairs
     Add-Type -AssemblyName PresentationFramework
-    [void][Windows.MessageBox]::Show('Aura-Slide needs a quick repair on this Windows account. Please download Aura-Slide again and run it - your files and slides are kept.', 'Aura-Slide', 'OK', 'Warning'); exit 1
+    [void][Windows.MessageBox]::Show('Lumi needs a quick repair on this Windows account. Please download Lumi again and run it - your files and slides are kept.', 'Lumi', 'OK', 'Warning'); exit 1
   }
   Start-Process -FilePath $pyw -ArgumentList ('"' + (Join-Path $PSScriptRoot 'form_server.py') + '"') -WindowStyle Hidden
   for ($i = 0; $i -lt 40 -and -not (Alive); $i++) { Start-Sleep -Milliseconds 250 }

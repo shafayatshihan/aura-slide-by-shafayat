@@ -246,7 +246,7 @@ export function mountEditor(el, { deckId, slide = 1, audio, bus, sceneCtx, mount
       msg.textContent = r && r.error === 'rules' ? `${friendlyRule(r.reason)} your slide wasn’t changed.`
         : r && (r.status === 409 || r.error === 'busy') ? 'claude is working on this deck right now. try again when it’s done.'
         : r && r.error === 'no-element' ? 'that text can’t be found any more. the slide may have changed.'
-        : r && r.error === 'offline' ? 'couldn’t reach aura-slide. is it still running?' : 'couldn’t save that. try again?';
+        : r && r.error === 'offline' ? 'couldn’t reach lumi. is it still running?' : 'couldn’t save that. try again?';
     });
     requestAnimationFrame(() => { ta.focus({ preventScroll: true }); ta.select(); });
   }

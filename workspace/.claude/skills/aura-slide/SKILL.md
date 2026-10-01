@@ -1,6 +1,6 @@
 ---
 name: aura-slide
-description: Aura-Slide deck builder. Use when the user says "show your aura", asks to make, build, change or start their slides, or sends an editor request that starts with "[slide N]" inside the Aura-Slide by Shafayat folder. Reads their brief and files, asks the few decisions that are unclear, plans the talk, builds an animated HTML deck with the Aura toolkit, checks it, packs it into one offline file in "4 - Your slides", makes the PDF / PowerPoint backups and speaker notes, and later edits it slide by slide.
+description: Lumi deck builder. Use when the user says "show your aura", asks to make, build, change or start their slides, or sends an editor request that starts with "[slide N]" inside the Aura-Slide by Shafayat folder. Reads their brief and files, asks the few decisions that are unclear, plans the talk, builds an animated HTML deck with the Aura toolkit, checks it, packs it into one offline file in "4 - Your slides", makes the PDF / PowerPoint backups and speaker notes, and later edits it slide by slide.
 ---
 
 # show your aura (v0.3)
@@ -23,7 +23,7 @@ Reference files beside this one (read them when the step says so):
 
 ## How you are started
 
-The Aura-Slide app is the only way in. It runs you in the background and shows your messages as chat bubbles.
+The Lumi app is the only way in. It runs you in the background and shows your messages as chat bubbles.
 - **First build:** the first message contains `[from-web]`. The user already reviewed their answers in the app, so
   **do not wait for "yes"**: say hello with the short summary and carry straight on. Ask only the decisions that are
   really unclear (see "Asking decisions"), never things the brief already answers.
@@ -89,7 +89,7 @@ ask about small edits (just do them). If nothing is unclear, ask nothing and car
 
 ## 1. Check the brief
 Read `.aura/brief/brief.json` (exact answers) and `.aura/brief/brief.md` (readable version, also lists their files).
-- If neither exists: tell them "Open Aura-Slide from the desktop icon and press **make a new deck** to fill in your
+- If neither exists: tell them "Open Lumi from the desktop icon and press **make a new deck** to fill in your
   answers first." End with `[[aura:ask]]`. Then stop.
 - Keys you will use: `basics.*` (type, title, subtitle, date, event), `people.*`, `audience.*` (who, level, minutes,
   qa, slides), `work.*` (field, summary, problem, method, results[], message, status, next), `look.theme`,

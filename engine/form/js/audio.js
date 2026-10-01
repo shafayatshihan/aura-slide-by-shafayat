@@ -1,4 +1,4 @@
-// Aura-Slide Studio sound: an original, procedurally generated lo-fi music engine and soft UI sounds,
+// Lumi sound: an original, procedurally generated lo-fi music engine and soft UI sounds,
 // built entirely from Web Audio nodes (no audio files). Everything degrades to silence if Web Audio is missing.
 import { emit } from './bus.js';
 

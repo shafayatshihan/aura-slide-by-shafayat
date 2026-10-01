@@ -96,7 +96,7 @@ export function toolLine(ev) {
     case 'Bash': case 'PowerShell': return helperLine(d);
     case 'Glob': case 'Grep': case 'LS': return 'looking through your files';
     case 'TodoWrite': return 'updating the plan';
-    case 'Skill': return 'opening the aura-slide toolkit';
+    case 'Skill': return 'opening the lumi toolkit';
     case 'WebFetch': case 'WebSearch': return 'looking something up';
     case 'Task': case 'Agent': return 'asking a helper';
     default: return 'working on it';
@@ -322,7 +322,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
         else {
           M.failed = true;
           card('error', ev.code === 'interrupted' ? 'claude was interrupted' : 'something went wrong',
-            ev.code === 'interrupted' ? 'aura-slide was closed while claude was working. pick up where it left off?' : 'claude stopped unexpectedly. it usually works on a second try.',
+            ev.code === 'interrupted' ? 'lumi was closed while claude was working. pick up where it left off?' : 'claude stopped unexpectedly. it usually works on a second try.',
             [btn('try again', retry, 'ws-ink')]);
         }
         if (live) sfx('error');
@@ -434,7 +434,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
       : done ? 'want a change? ask claude here…' : 'tell claude what to do next…';
     cards.forEach(c => c.setEnabled(canReply));
     box.classList.toggle('is-ask', waiting && canReply);
-    statusTxt.textContent = offline ? 'can’t reach aura-slide…' : gate === 'cli' ? 'not installed' : gate === 'signin' ? 'needs sign-in'
+    statusTxt.textContent = offline ? 'can’t reach lumi…' : gate === 'cli' ? 'not installed' : gate === 'signin' ? 'needs sign-in'
       : elsewhere ? 'busy with another deck' : running ? 'working' : waiting ? 'waiting for you' : done ? (EDIT ? 'ready' : 'finished')
       : M.stopped ? 'stopped' : M.failed ? 'paused' : hasRun() ? 'idle' : 'ready';
     head.dataset.state = offline ? 'off' : running ? 'run' : waiting ? 'ask' : done ? 'done' : 'idle';
@@ -463,7 +463,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
     let body;
     if (kind === 'cli') {
       body = [h('div', { class: 'ws-art', html: ART.cli }), h('p', { class: 'ws-g-t' }, 'claude isn’t installed yet'),
-        h('p', { class: 'ws-g-x' }, 'aura-slide needs the claude app to build your slides. use “update aura-slide” on the loading screen, then come back here.'),
+        h('p', { class: 'ws-g-x' }, 'lumi needs the claude app to build your slides. use “update lumi” on the loading screen, then come back here.'),
         h('div', { class: 'ws-g-b' }, btn('check again', async e => {
           const b = e.currentTarget; b.disabled = true; b.textContent = 'checking…';
           const s = await api.claude.status(true); if (!alive) return;
@@ -494,7 +494,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
     b.disabled = true; sfx('launch');
     const r = await api.claude.login();
     if (!alive) return;
-    if (r && r.ok === false) { b.disabled = false; sfx('error'); gateToast(r.error === 'offline' ? 'couldn’t reach aura-slide. is its window open?' : 'couldn’t open the sign-in window. try again?'); return; }
+    if (r && r.ok === false) { b.disabled = false; sfx('error'); gateToast(r.error === 'offline' ? 'couldn’t reach lumi. is its window open?' : 'couldn’t open the sign-in window. try again?'); return; }
     b.textContent = 'waiting for you to sign in…';
     b.classList.add('is-waiting');
     gateToast('a sign-in window opened. finish there; this page notices by itself.');
@@ -530,7 +530,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
       if (r.error === 'cli-missing') { status = { ...(status || {}), cli: false }; showGate('cli'); return false; }
       if (r.error === 'busy') return true;
       sfx('error');
-      note(r.error === 'offline' ? 'couldn’t reach aura-slide. is its window still open?' : 'claude couldn’t start. try again in a moment.', 'ws-quiet');
+      note(r.error === 'offline' ? 'couldn’t reach lumi. is its window still open?' : 'claude couldn’t start. try again in a moment.', 'ws-quiet');
       return false;
     }
     running = true; srvWaiting = undefined;
@@ -571,7 +571,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
       const n = pendingUser.indexOf(p); if (n >= 0) pendingUser.splice(n, 1);
       if (hadFile) { attached = hadFile; paintClip(); }
       if (r.error === 'cli-missing') { status = { ...(status || {}), cli: false }; showGate('cli'); }
-      else { sfx('error'); note(r.error === 'offline' ? 'couldn’t reach aura-slide, so that wasn’t sent.' : r.error === 'no-session' ? 'claude can’t pick this deck up here. small text changes still work on the slide.' : 'that didn’t send. try again?', 'ws-quiet'); }
+      else { sfx('error'); note(r.error === 'offline' ? 'couldn’t reach lumi, so that wasn’t sent.' : r.error === 'no-session' ? 'claude can’t pick this deck up here. small text changes still work on the slide.' : 'that didn’t send. try again?', 'ws-quiet'); }
       paint();
       return;
     }

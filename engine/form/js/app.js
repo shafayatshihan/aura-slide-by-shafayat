@@ -1,4 +1,4 @@
-// Aura-Slide Studio shell: scales the 1600x900 stage, walks the screens from steps.js, keeps the answers (local +
+// Lumi shell: scales the 1600x900 stage, walks the screens from steps.js, keeps the answers (local +
 // server autosave), and wires in the optional modules (gaze, cursor, audio, scenes, uploads, looks, workshop).
 // Every optional module is loaded defensively: if one is missing or throws, the app keeps working without it.
 import { bus, emit, on } from './bus.js';
@@ -561,7 +561,7 @@ async function makeSlides() {
   const saved = await saveNow();
   if (!saved) {
     btn.disabled = false; $('.lbl', btn).textContent = 'make my slides';
-    complain({ msg: 'couldn’t reach aura-slide. is its window still open?', el: btn });
+    complain({ msg: 'couldn’t reach lumi. is its window still open?', el: btn });
     return;
   }
   const st = await api.claude.status();
@@ -791,7 +791,7 @@ async function mountRoute(name, opts = {}) {
   const m = await need(name);
   try {
     if (name === 'loading' && m) routeView = m.mountLoading(host, { audio, onDone: afterLoading });
-    else if (name === 'home' && m) routeView = m.mountHome(host, { audio, update: updateInfo, onNew: newDeck, onOpen: openFromHome,
+    else if (name === 'home' && m) routeView = m.mountHome(host, { audio, update: updateInfo, onNew: () => newDeck({ fresh: true }), onResume: resumeDraft, onOpen: openFromHome,
       draft: () => (!draftUsed && reached >= 2 ? { step: Math.min(reached, iOf('review')) } : null) });
     else if (name === 'editor' && m) routeView = m.mountEditor(host, { deckId: opts.deckId, slide: opts.slide, audio, bus, sceneCtx, mountScene, onHome: goHome });
   } catch (e) { console.warn('[aura] could not open', name, e); }
@@ -816,14 +816,18 @@ function openFromHome(dk) {
   buildDeck = dk.id;
   return setRoute('wizard', { screen: 'workshop' });
 }
-// "make a new deck": a fresh draft once the last one has been built; an unfinished draft is kept (the welcome screen
-// offers to pick it up or start fresh). The server's draft brief is only overwritten once the person starts answering.
-function newDeck() {
-  if (draftUsed) {
+// "make a new deck": a fresh draft once the last one has been built. From home it is always fresh (an unfinished
+// draft has its own "continue" card there). The server's draft brief is only overwritten once the person starts answering.
+function newDeck({ fresh = false } = {}) {
+  if (draftUsed || fresh) {
     data = {}; touched = new Set(); reached = 0; draftUsed = false; buildDeck = null;
     applyDefaults(); lastSaved = JSON.stringify(data); persistLocal();
   }
   return setRoute('wizard', { screen: 'welcome' });
+}
+// "continue your draft": straight back to the step the person had reached.
+function resumeDraft() {
+  return setRoute('wizard', { screen: SCREENS[Math.max(0, Math.min(reached, iOf('review')))].id });
 }
 
 // Tiny hook for tests and the integration step.

@@ -1,6 +1,6 @@
 @echo off
-rem Aura-Slide by Shafayat - double-click this file to set everything up.
-title Aura-Slide setup
+rem Lumi - double-click this file to set everything up.
+title Lumi setup
 cd /d "%~dp0"
 
 rem Opened straight from inside the ZIP? Windows then runs it from a temporary copy without the other files.
@@ -16,8 +16,8 @@ echo   ============================================================
 echo    Please extract the ZIP first.
 echo.
 echo    1. Close this window.
-echo    2. Right-click the Aura-Slide ZIP file and choose "Extract All".
-echo    3. Open the new folder and double-click "Setup Aura-Slide" again.
+echo    2. Right-click the Lumi ZIP file and choose "Extract All".
+echo    3. Open the new folder and double-click "Setup Lumi" again.
 echo   ============================================================
 echo.
 pause

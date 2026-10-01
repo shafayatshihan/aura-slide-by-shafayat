@@ -1,12 +1,12 @@
-# Publish Aura-Slide to GitHub in one go: save (commit) every change, upload (push) it, then wait while GitHub
-# builds Aura-Slide-Setup.zip onto the release (.github/workflows/release.yml).
+# Publish Lumi to GitHub in one go: save (commit) every change, upload (push) it, then wait while GitHub
+# builds Lumi-Setup.zip onto the release (.github/workflows/release.yml).
 # First run only: installs GitHub CLI if missing, signs in through the browser, creates the public repo.
 # Started by "Publish to GitHub.bat". ASCII-only on purpose (Windows PowerShell 5.1).
 # Continue, not Stop: in PowerShell 5.1 any text a program writes to stderr (gh, git progress) becomes an error record,
 # and with Stop that kills the script. Success is judged by exit codes instead (see Quiet / Show).
 $ErrorActionPreference = 'Continue'
 $Repo  = Split-Path -Parent $PSScriptRoot
-$Owner = 'shafayatshihan'; $Name = 'aura-slide-by-shafayat'; $Slug = "$Owner/$Name"
+$Owner = 'shafayatshihan'; $Name = 'lumi'; $Slug = "$Owner/$Name"
 Set-Location $Repo
 
 function Say([string]$t, [string]$c = 'Gray') { Write-Host $t -ForegroundColor $c }
@@ -22,7 +22,7 @@ function Git { & $env:ComSpec /d /c ('git ' + ($args -join ' ') + ' 2>&1'); if (
 
 trap { Say ''; Say ('  Something went wrong: ' + $_.Exception.Message) 'Red'; Say ''; Read-Host '  Press Enter to close'; exit 1 }
 Clear-Host
-Say ''; Say '  Aura-Slide  >>  publish to GitHub' 'Cyan'; Say "  $Slug" 'DarkGray'; Say ''
+Say ''; Say '  Lumi  >>  publish to GitHub' 'Cyan'; Say "  $Slug" 'DarkGray'; Say ''
 
 # ---- tools
 Refresh-Path
@@ -77,6 +77,8 @@ else {
 
 # ---- push (creates the repo the first time)
 if (-not (Quiet "gh repo view $Slug")) {
+  # the repo was called aura-slide-by-shafayat before 0.4: rename it instead of making a second one
+  if (Quiet "gh repo view $Owner/aura-slide-by-shafayat") { Stop-Here "The repo is still named aura-slide-by-shafayat. Rename it first: gh repo rename $Name --repo $Owner/aura-slide-by-shafayat" }
   Say '  Creating the public repo on GitHub...' 'Cyan'
   if (-not (Show "gh repo create $Slug --public --source . --remote origin --push --description `"One-click slide maker for non-technical users: Windows setup + Claude skill`"")) { Stop-Here 'Could not create the repo.' }
 } else {
@@ -86,14 +88,14 @@ if (-not (Quiet "gh repo view $Slug")) {
 }
 
 # ---- wait for GitHub to build the download
-Say ''; Say '  GitHub is building Aura-Slide-Setup.zip (about 1 minute)...' 'Cyan'
+Say ''; Say '  GitHub is building Lumi-Setup.zip (about 1 minute)...' 'Cyan'
 Start-Sleep -Seconds 6
 $run = (& gh run list --repo $Slug --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>$null)
 if ($run) { $ok = Quiet "gh run watch $run --repo $Slug --exit-status" } else { $ok = $false }
 Say ''
 if ($ok) {
   Say "  Done! Version $ver is live." 'Green'
-  Say "  Download link: https://github.com/$Slug/releases/latest/download/Aura-Slide-Setup.zip" 'White'
+  Say "  Download link: https://github.com/$Slug/releases/latest/download/Lumi.exe" 'White'
 } else {
   Say '  Uploaded, but the zip build did not report success yet. Opening the Actions page so you can check.' 'Yellow'
   Start-Process "https://github.com/$Slug/actions"

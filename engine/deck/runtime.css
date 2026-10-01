@@ -1,4 +1,4 @@
-/* Aura-Slide deck runtime: layout, navigation chrome, slide-enter animations, all-slides (print/check) mode.
+/* Lumi deck runtime: layout, navigation chrome, slide-enter animations, all-slides (print/check) mode.
    Slides are authored at 1920 x 1080 and scaled to fit the window. Theme files set the tokens below. */
 :root {
   --aura-letterbox: #0b0b0c;

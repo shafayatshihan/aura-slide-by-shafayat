@@ -5,9 +5,9 @@
 import * as api from './api.js';
 
 const ORDER = ['engine', 'node', 'modules', 'edge', 'python', 'claude', 'signin', 'disk', 'version'];
-const NAMES = { engine: 'aura-slide files', node: 'node.js', modules: 'slide tools', edge: 'microsoft edge', python: 'export tools',
+const NAMES = { engine: 'lumi files', node: 'node.js', modules: 'slide tools', edge: 'microsoft edge', python: 'export tools',
   claude: 'claude', signin: 'claude sign-in', disk: 'free space', version: 'updates' };
-const FIX_LABEL = { npm: 'install them', pip: 'install them', signin: 'sign in', update: 'update aura-slide', claude: 'update aura-slide' };
+const FIX_LABEL = { npm: 'install them', pip: 'install them', signin: 'sign in', update: 'update lumi', claude: 'update lumi' };
 const PREMIUM = ['pro', 'max', 'team', 'enterprise'];
 const MIN_MS = 1500;
 
@@ -27,7 +27,7 @@ const ICON = {
   warn: '<svg viewBox="0 0 24 24"><path d="M12 7v6.5M12 17v.4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const lowerFirst = s => { s = String(s || ''); return /^(Aura-Slide|Claude|Microsoft|Node\.js|Python)\b/.test(s) ? s : s.replace(/^[A-Z](?=[a-z ])/, c => c.toLowerCase()); };
+const lowerFirst = s => { s = String(s || ''); return /^(Lumi|Claude|Microsoft|Node\.js|Python)\b/.test(s) ? s : s.replace(/^[A-Z](?=[a-z ])/, c => c.toLowerCase()); };
 
 export function mountLoading(el, { audio, onDone } = {}) {
   const sfx = n => { try { audio && audio.sfx && audio.sfx(n); } catch (e) { /* optional */ } };
@@ -119,7 +119,7 @@ export function mountLoading(el, { audio, onDone } = {}) {
     premium.hidden = !free;
     if (free) {
       const plan = String(health.subscriptionType);
-      premium.replaceChildren(h('p', { class: 'ld-p-t' }, 'aura-slide needs claude pro, max or team'),
+      premium.replaceChildren(h('p', { class: 'ld-p-t' }, 'lumi needs claude pro, max or team'),
         h('p', { class: 'ld-p-x' }, `you’re signed in with a ${plan.toLowerCase()} plan, which can’t run claude in the background. upgrade at claude.ai, or sign in with an account that has a paid plan.`));
     }
     const t = el.querySelector('.ld-badge-t');
@@ -130,11 +130,11 @@ export function mountLoading(el, { audio, onDone } = {}) {
       head.replaceChildren('warming up', h('br'), 'the studio');
       sideBadge.textContent = 'one moment';
     } else if (state === 'offline') {
-      t.textContent = 'can’t reach aura-slide';
+      t.textContent = 'can’t reach lumi';
       head.replaceChildren('hmm, the studio', h('br'), 'isn’t answering');
       sideBadge.textContent = 'try again';
-      side2.replaceChildren('aura-slide’s helper', h('br'), 'stopped running');
-      sideNote.textContent = 'close this window and open aura-slide again from your desktop.';
+      side2.replaceChildren('lumi’s helper', h('br'), 'stopped running');
+      sideNote.textContent = 'close this window and open lumi again from your desktop.';
       again.hidden = false;
     } else if (state === 'ok') {
       t.textContent = 'all set';
@@ -150,7 +150,7 @@ export function mountLoading(el, { audio, onDone } = {}) {
       head.replaceChildren(n === 1 ? 'one thing' : 'a couple of', h('br'), n === 1 ? 'to sort out' : 'things to fix');
       sideBadge.textContent = 'almost there';
       side2.replaceChildren('press the button', h('br'), 'next to each one');
-      sideNote.textContent = free ? 'claude needs a paid plan to build slides.' : 'aura-slide fixes most things by itself. it can take a minute or two.';
+      sideNote.textContent = free ? 'claude needs a paid plan to build slides.' : 'lumi fixes most things by itself. it can take a minute or two.';
       again.hidden = false; skip.hidden = false;
       sfx('error');
     }
@@ -173,7 +173,7 @@ export function mountLoading(el, { audio, onDone } = {}) {
     if (!alive) return;
     if (!res || res.ok === false) {
       r.fixing = false;
-      say(res && res.message ? res.message : res && res.error === 'offline' ? 'couldn’t reach aura-slide.' : 'that didn’t start. try again?');
+      say(res && res.message ? res.message : res && res.error === 'offline' ? 'couldn’t reach lumi.' : 'that didn’t start. try again?');
       r.li.dataset.state = 'fail'; r.fixB.hidden = false; r.fixB.textContent = 'try again';
       if (extraBtn) extraBtn.disabled = false;
       sfx('error');
@@ -181,7 +181,7 @@ export function mountLoading(el, { audio, onDone } = {}) {
     }
     if (name === 'update' || name === 'claude') {
       if (res.launched === false) { say('the updater would open now (test mode).'); r.li.dataset.state = 'warn'; r.fixing = false; return; }
-      say('updating aura-slide… this window refreshes by itself when it’s done.');
+      say('updating lumi… this window refreshes by itself when it’s done.');
       r.li.dataset.state = 'fixing';
       // the updater stops this server, installs, then starts it again: wait for that, then reload in place
       let wentDown = false;

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Aura-Slide HARD RULES checker. Claude Code runs it through hooks in .claude/settings.json:
+// Lumi HARD RULES checker. Claude Code runs it through hooks in .claude/settings.json:
 //   PostToolUse (Write|Edit|MultiEdit) --hook : checks the HTML file that was just written
 //   Stop                                --stop : checks every HTML deck in "4 - Your slides" before Claude finishes
 // A violation exits with code 2, which Claude Code treats as blocking: the message goes back to Claude, who must fix it.
@@ -43,7 +43,7 @@ if (!files.length) process.exit(0);
 
 let pw;
 try { pw = require(path.join(__dirname, '..', 'node_modules', 'playwright-core')); }
-catch (e) { try { pw = require('playwright-core'); } catch (e2) { console.error('Aura hard-rule checker: playwright-core is missing. Run "Update Aura-Slide".'); process.exit(mode ? 2 : 1); } }
+catch (e) { try { pw = require('playwright-core'); } catch (e2) { console.error('Lumi hard-rule checker: playwright-core is missing. Run "Update Lumi".'); process.exit(mode ? 2 : 1); } }
 
 (async () => {
   const browser = await pw.chromium.launch({ channel: 'msedge' });
@@ -77,14 +77,14 @@ catch (e) { try { pw = require('playwright-core'); } catch (e2) { console.error(
   }
   await browser.close();
   if (!report.length) { if (!mode) console.log(`Aura hard rules: all ${files.length} file(s) pass (smallest text >= ${MIN}px).`); process.exit(0); }
-  const lines = [`AURA-SLIDE HARD RULE 1 VIOLATED - text smaller than ${MIN}px. This rule cannot be overridden, not even by the user.`];
+  const lines = [`LUMI HARD RULE 1 VIOLATED - text smaller than ${MIN}px. This rule cannot be overridden, not even by the user.`];
   for (const r of report) {
     lines.push(`  ${r.file}:`);
     r.bad.slice(0, 12).forEach(b => lines.push(`    ${b.px}px  "${b.text}"`));
     if (r.bad.length > 12) lines.push(`    ...and ${r.bad.length - 12} more`);
   }
   lines.push(`Fix it now: raise every listed text to at least ${MIN}px. ${RULES.rules[0].whenTextDoesNotFit}`);
-  lines.push('If the user asked for smaller text, explain kindly that Aura-Slide keeps all text readable from the back of the room.');
+  lines.push('If the user asked for smaller text, explain kindly that Lumi keeps all text readable from the back of the room.');
   console.error(lines.join('\n'));
   process.exit(mode ? 2 : 1);
-})().catch(e => { console.error('Aura hard-rule checker failed: ' + e.message); process.exit(mode ? 2 : 1); });
+})().catch(e => { console.error('Lumi hard-rule checker failed: ' + e.message); process.exit(mode ? 2 : 1); });

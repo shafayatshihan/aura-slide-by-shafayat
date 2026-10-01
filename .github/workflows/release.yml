@@ -1,7 +1,7 @@
-# On every push to main: build AuraSlide.exe (the installer + launcher people download) and Aura-Slide-Setup.zip (the
+# On every push to main: build Lumi.exe (the installer + launcher people download) and Lumi-Setup.zip (the
 # app files the exe downloads), and put both on the release named after the version in setup/aura.config.json.
 # Same version -> the files on that release are replaced; new version -> a new release is made.
-# The download links (releases/latest/download/Aura-Slide-Setup.zip and .../AuraSlide.exe) therefore always give the
+# The download links (releases/latest/download/Lumi-Setup.zip and .../Lumi.exe) therefore always give the
 # newest files. The exe is built on Windows with the C# compiler that ships with the .NET Framework (no extra tools).
 name: Build release
 on:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Build AuraSlide.exe
+      - name: Build Lumi.exe
         run: python tools/build_exe.py
       - name: Build the zip
         run: python tools/make_release.py
@@ -31,11 +31,13 @@ jobs:
         run: |
           VERSION=$(python -c "import json;print(json.load(open('setup/aura.config.json'))['version'])")
           TAG="v$VERSION"
+          # v0.3.x installs update by fetching Aura-Slide-Setup.zip; keep serving it under that name too.
+          cp release/Lumi-Setup.zip release/Aura-Slide-Setup.zip
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" release/Aura-Slide-Setup.zip release/AuraSlide.exe --clobber
+            gh release upload "$TAG" release/Lumi-Setup.zip release/Aura-Slide-Setup.zip release/Lumi.exe --clobber
             echo "Updated the files on $TAG"
           else
-            gh release create "$TAG" release/Aura-Slide-Setup.zip release/AuraSlide.exe --title "Aura-Slide $VERSION" --latest \
-              --notes "Download **AuraSlide.exe** below and double-click it. If Windows says \"Windows protected your PC\", click **More info**, then **Run anyway**. Only for Claude premium users (Pro, Max or Team)."
+            gh release create "$TAG" release/Lumi-Setup.zip release/Aura-Slide-Setup.zip release/Lumi.exe --title "Lumi $VERSION" --latest \
+              --notes "Download **Lumi.exe** below and double-click it. If Windows says \"Windows protected your PC\", click **More info**, then **Run anyway**. Only for Claude premium users (Pro, Max or Team)."
             echo "Created $TAG"
           fi

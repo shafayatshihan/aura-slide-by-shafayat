@@ -1,6 +1,6 @@
 // Home: the deck library. A big "make a new deck" card on the left, then one card per deck from GET /api/decks
 // (thumbnail, title, date, look badge, status, edit · present · folder), six to a page so nothing ever scrolls.
-// mountHome(el, { audio, onNew, onOpen(deck), draft() -> {step}|null, update }) -> { destroy(), refresh() }
+// mountHome(el, { audio, onNew, onResume, onOpen(deck), draft() -> {step}|null, update }) -> { destroy(), refresh() }
 import * as api from './api.js';
 
 const PER_PAGE = 6;
@@ -57,23 +57,28 @@ function when(iso) {
   return d.toLocaleDateString([], { day: 'numeric', month: 'short', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) }).toLowerCase();
 }
 
-export function mountHome(el, { audio, onNew, onOpen, draft, update } = {}) {
+export function mountHome(el, { audio, onNew, onResume, onOpen, draft, update } = {}) {
   const sfx = n => { try { audio && audio.sfx && audio.sfx(n); } catch (e) { /* optional */ } };
   let alive = true, decks = [], page = 0, loaded = false, pollT = 0;
 
   const d = draft ? draft() : null;
+  // "make a new deck" is always the main card; an unfinished draft only adds a smaller "continue" card under it.
   const newCard = h('button', { type: 'button', class: 'hm-new', 'data-cursor-label': 'new deck', 'data-nosfx': '' },
     h('span', { class: 'hm-new-top', html: NEW_ART }),
     h('span', { class: 'hm-new-row' }, h('span', { class: 'hm-new-plus', html: SVG.plus }),
-      h('span', { class: 'hm-new-t' }, h('span', { class: 'hm-new-h' }, d ? 'continue your draft' : 'make a new deck'),
-        h('span', { class: 'hm-new-s' }, d ? `you’re at step ${d.step}. pick up where you left off.` : 'tell me about your talk. claude builds it.'))));
+      h('span', { class: 'hm-new-t' }, h('span', { class: 'hm-new-h' }, 'make a new deck'),
+        h('span', { class: 'hm-new-s' }, 'tell me about your talk. claude builds it.'))));
   newCard.addEventListener('click', () => { sfx('launch'); onNew && onNew(); });
+  const contCard = d ? h('button', { type: 'button', class: 'hm-cont', 'data-cursor-label': 'continue', 'data-nosfx': '' },
+    h('span', { class: 'hm-cont-h' }, 'continue your draft'),
+    h('span', { class: 'hm-cont-s' }, `you’re at step ${d.step}. pick up where you left off.`)) : null;
+  if (contCard) contCard.addEventListener('click', () => { sfx('launch'); onResume && onResume(); });
   const left = h('div', { class: 'hm-left' },
     h('span', { class: 'badge' }, 'your library'),
     h('h1', { class: 'q hm-head' }, 'your decks'),
     h('p', { class: 'lead hm-lead' }, 'open one to change it with claude, or start something new.'),
     update ? h('p', { class: 'hm-upd' }, h('span', { class: 'hm-upd-dot' }), `a new version (${String(update.latest).replace(/^v/, '')}) is ready. update from the loading screen next time.`) : null,
-    newCard);
+    newCard, contCard);
   const grid = h('div', { class: 'hm-grid', role: 'list', 'aria-label': 'your decks' });
   const count = h('span', { class: 'hm-count' });
   const prev = h('button', { type: 'button', class: 'pg', 'aria-label': 'previous page', html: SVG.left });
@@ -163,7 +168,7 @@ export function mountHome(el, { audio, onNew, onOpen, draft, update } = {}) {
       const changed = sig !== refresh.sig; refresh.sig = sig;
       decks = r.decks; loaded = true;
       if (changed) paint();
-    } else if (!loaded) { loaded = true; paint(); say('couldn’t load your decks. is aura-slide still running?'); }
+    } else if (!loaded) { loaded = true; paint(); say('couldn’t load your decks. is lumi still running?'); }
     clearTimeout(pollT);
     // keep an eye on decks that are being built
     pollT = setTimeout(refresh, decks.some(x => x.status === 'building') ? 3000 : 15000);

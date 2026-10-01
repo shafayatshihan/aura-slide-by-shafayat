@@ -1,4 +1,4 @@
-/* Aura-Slide deck runtime (classic script, no dependencies).
+/* Lumi deck runtime (classic script, no dependencies).
    Load it in <head>; slides are <section class="slide"> inside <main class="deck">.
    Modes (URL): normal | ?aura=all (every slide stacked, final states: print, PDF, checks)
                 | ?aura=still (normal navigation, no motion) | ?aura=presenter (notes view, used by the P window)

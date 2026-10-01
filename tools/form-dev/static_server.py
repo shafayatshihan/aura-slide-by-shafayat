@@ -1,4 +1,4 @@
-"""Developer-only static server for building the Aura-Slide web app before/without the real form_server.py.
+"""Developer-only static server for building the Lumi web app before/without the real form_server.py.
 Serves engine/form at /, engine/fonts at /fonts/, three.js at /vendor/three/, tools/form-dev at /dev/, with byte-range
 support (the gaze video seeks), plus small MOCK versions of the /api/* endpoints so the UI can be exercised end to end.
 Not shipped (tools/ is excluded from releases).

@@ -2,7 +2,7 @@
   "name": "aura-slide-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "Aura-Slide by Shafayat - 3D scenes (three.js), bundling (Vite) and frame capture in Microsoft Edge (Playwright).",
+  "description": "Lumi by Shafayat - 3D scenes (three.js), bundling (Vite) and frame capture in Microsoft Edge (Playwright).",
   "license": "MIT",
   "dependencies": {
     "playwright-core": "^1.63.0",

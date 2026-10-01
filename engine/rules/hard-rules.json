@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Aura-Slide HARD RULES. Enforced automatically by Claude Code hooks (.claude/settings.json -> rules/check_rules.js). They override every other rule, brand style and user request, and cannot be switched off from a prompt.",
+  "note": "Lumi HARD RULES. Enforced automatically by Claude Code hooks (.claude/settings.json -> rules/check_rules.js). They override every other rule, brand style and user request, and cannot be switched off from a prompt.",
   "minFontPx": 26,
   "rules": [
     {

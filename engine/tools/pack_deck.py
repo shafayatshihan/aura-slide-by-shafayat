@@ -218,7 +218,7 @@ class Packer:
         if not re.search(r'<meta\s+charset', html, re.I):
             html = re.sub(r'<head[^>]*>', lambda m: m.group(0) + '\n<meta charset="utf-8">', html, count=1, flags=re.I)
         stamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
-        html = re.sub(r'<html\b', f'<!-- Made with Aura-Slide by Shafayat, {stamp}. One file, works offline. Keys: arrows/space, F full screen, N notes, P presenter window, B black screen. -->\n<html', html, count=1, flags=re.I)
+        html = re.sub(r'<html\b', f'<!-- Made with Lumi, {stamp}. One file, works offline. Keys: arrows/space, F full screen, N notes, P presenter window, B black screen. -->\n<html', html, count=1, flags=re.I)
         self.uses_three = uses_three
         return html
 
@@ -233,7 +233,7 @@ class Packer:
     def add_three(self, html):
         mod, core = THREE_DIR / 'three.module.js', THREE_DIR / 'three.core.js'
         if not mod.is_file():
-            raise PackError('three.js is missing from .aura/engine. Run "Update Aura-Slide", or make the 3D slides 2D.')
+            raise PackError('three.js is missing from .aura/engine. Run "Update Lumi", or make the 3D slides 2D.')
         b64 = lambda s: base64.b64encode(s.encode('utf-8')).decode('ascii')
         imports = {}
         small = self.minified_three()
