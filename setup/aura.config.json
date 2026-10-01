@@ -1,13 +1,15 @@
 {
   "name": "Aura-Slide by Shafayat",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "repoUrl": "https://github.com/shafayatshihan/aura-slide-by-shafayat",
   "releaseZip": "https://github.com/shafayatshihan/aura-slide-by-shafayat/releases/latest/download/Aura-Slide-Setup.zip",
-  "claudeExtension": "anthropic.claude-code",
   "pythonPackages": [
     "pillow",
     "python-pptx",
-    "imageio-ffmpeg"
+    "imageio-ffmpeg",
+    "python-docx",
+    "openpyxl",
+    "pypdf"
   ],
   "formPort": 8765
 }

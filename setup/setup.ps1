@@ -1,9 +1,16 @@
 # Aura-Slide by Shafayat - one-click setup for Windows 10/11.
-# Makes C:\Aura-Slide by Shafayat, installs whatever is missing (VS Code, Git, Node.js, Python, Claude Code and its
-# VS Code extension, the slide engine), adds the icon and shortcuts, then opens the form and VS Code.
+# Makes C:\Aura-Slide by Shafayat, installs whatever is missing (Git, Node.js, Python, Claude Code, the slide engine),
+# adds the icon and shortcuts, then opens the Aura-Slide app.
 # Safe to run again: anything already installed is skipped and the user's own files are never touched.
+#   -Json      no console drawing: print one JSON line per step event instead, for AuraSlide.exe to show:
+#              {"step":n,"total":N,"name":"...","state":"start|ok|have|fail","detail":"..."}
+#              The first line has state "plan" and lists every step name in "detail", separated by "|".
+#              Step 0 is the quick check of this PC (Windows version, free space, internet, winget).
+#   -NoLaunch  do not open the app at the end.
+# Env AURA_ROOT installs somewhere else (developer tests); shortcuts then go into that folder, not the real Desktop.
+# Env AURA_EXE is the AuraSlide.exe to install when this release has none of its own (AuraSlide.exe passes itself).
 # Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less scripts in the ANSI code page.
-param([switch]$NoLaunch)
+param([switch]$NoLaunch, [switch]$Json)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -11,7 +18,9 @@ $ProgressPreference = 'SilentlyContinue'
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
 
 $Repo  = Split-Path -Parent $PSScriptRoot
-$Root  = 'C:\Aura-Slide by Shafayat'
+$DefaultRoot = 'C:\Aura-Slide by Shafayat'
+$Root  = if ($env:AURA_ROOT) { [IO.Path]::GetFullPath($env:AURA_ROOT) } else { $DefaultRoot }
+$TestInstall = ($Root.TrimEnd('\') -ne $DefaultRoot)
 $Aura  = Join-Path $Root '.aura'
 $Logs  = Join-Path $Aura 'logs'
 $Stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
@@ -20,7 +29,7 @@ $Config = Get-Content (Join-Path $PSScriptRoot 'aura.config.json') -Raw | Conver
 
 # ---------------------------------------------------------------- look & feel
 $FULL = [string][char]0x2588; $EMPTY = [string][char]0x2591
-function Line([string]$t = '', [string]$c = 'Gray') { Write-Host $t -ForegroundColor $c }
+function Line([string]$t = '', [string]$c = 'Gray') { if (-not $Json) { Write-Host $t -ForegroundColor $c } }
 $GLYPH = @{
   'A' = @(' ### ', '#   #', '#####', '#   #', '#   #'); 'U' = @('#   #', '#   #', '#   #', '#   #', ' ### ')
   'R' = @('#### ', '#   #', '#### ', '#  # ', '#   #'); '-' = @('    ', '    ', '### ', '    ', '    ')
@@ -29,6 +38,7 @@ $GLYPH = @{
   'E' = @('#####', '#    ', '#### ', '#    ', '#####')
 }
 function Banner {
+  if ($Json) { return }
   Clear-Host
   Line ''
   $word = 'AURA-SLIDE'; $cols = @('Cyan', 'Cyan', 'Cyan', 'Cyan', 'DarkGray', 'Magenta', 'Magenta', 'Magenta', 'Magenta', 'Magenta')
@@ -46,17 +56,26 @@ function Bar([int]$done, [int]$total, [int]$w = 34) {
   $n = [int][math]::Round($w * $done / [math]::Max(1, $total)); ($FULL * $n) + ($EMPTY * ($w - $n))
 }
 function Overall([int]$done, [int]$total) {
+  if ($Json) { return }
   $pct = [int](100 * $done / [math]::Max(1, $total))
   Write-Host ('  Overall  ' + (Bar $done $total) + ('  {0,3}%  ({1} of {2} steps)' -f $pct, $done, $total)) -ForegroundColor Cyan
   Line ''
 }
 function Tag([string]$t, [string]$bg, [string]$msg) {
+  if ($Json) { return }
   Write-Host ('  ' + $t.PadRight(6)) -ForegroundColor Black -BackgroundColor $bg -NoNewline; Write-Host (' ' + $msg)
 }
 function Ok([string]$m)   { Tag ' OK' 'Green' $m }
 function Skip([string]$m) { Tag 'FOUND' 'DarkCyan' $m }
 function Bad([string]$m)  { Tag ' FAIL' 'Red' $m }
 function Log([string]$m)  { if ($Log) { Add-Content -Path $Log -Value ('[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $m) } }
+# One JSON progress line for AuraSlide.exe (only with -Json). Written straight to stdout, flushed at once.
+function Emit([int]$step, [string]$name, [string]$state, [string]$detail = '') {
+  if (-not $Json) { return }
+  $o = [ordered]@{ step = $step; total = $Steps.Count; name = $name; state = $state; detail = $detail }
+  [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress)); [Console]::Out.Flush()
+}
+function Stop-Here([int]$code) { if (-not $Json) { Read-Host '  Press Enter to close' | Out-Null }; exit $code }
 
 # Run a program hidden, with a live spinner + elapsed time, output appended to the log. Returns the exit code.
 function Run([string]$what, [string]$exe, [string]$argsLine) {
@@ -72,12 +91,14 @@ function Run([string]$what, [string]$exe, [string]$argsLine) {
   $p = [Diagnostics.Process]::Start($psi)
   $spin = '|/-\'; $i = 0; $t0 = Get-Date
   while (-not $p.HasExited) {
-    $s = [int]((Get-Date) - $t0).TotalSeconds
-    $wait = if ($s -ge 15) { '  - this can take a few minutes, please do not close this window' } else { '' }
-    Write-Host ("`r         {0} {1}   {2}:{3:D2}{4} " -f $spin[$i % 4], $what, [int]($s / 60), ($s % 60), $wait) -NoNewline -ForegroundColor DarkGray
+    if (-not $Json) {
+      $s = [int]((Get-Date) - $t0).TotalSeconds
+      $wait = if ($s -ge 15) { '  - this can take a few minutes, please do not close this window' } else { '' }
+      Write-Host ("`r         {0} {1}   {2}:{3:D2}{4} " -f $spin[$i % 4], $what, [int]($s / 60), ($s % 60), $wait) -NoNewline -ForegroundColor DarkGray
+    }
     Start-Sleep -Milliseconds 180; $i++
   }
-  Write-Host ("`r" + (' ' * 118) + "`r") -NoNewline
+  if (-not $Json) { Write-Host ("`r" + (' ' * 118) + "`r") -NoNewline }
   if ($Log) { Get-Content $tmp -ErrorAction SilentlyContinue | Add-Content -Path $Log }
   Remove-Item $tmp -ErrorAction SilentlyContinue
   Log "<< exit $($p.ExitCode)"
@@ -86,8 +107,7 @@ function Run([string]$what, [string]$exe, [string]$argsLine) {
 
 function Refresh-Path {
   $m = [Environment]::GetEnvironmentVariable('Path', 'Machine'); $u = [Environment]::GetEnvironmentVariable('Path', 'User')
-  $extra = @("$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin", "$env:ProgramFiles\Microsoft VS Code\bin",
-             "$env:USERPROFILE\.local\bin", "$env:ProgramFiles\Git\cmd", "$env:ProgramFiles\nodejs",
+  $extra = @("$env:USERPROFILE\.local\bin", "$env:ProgramFiles\Git\cmd", "$env:ProgramFiles\nodejs",
              "$env:LOCALAPPDATA\Programs\Python\Python312", "$env:LOCALAPPDATA\Programs\Python\Python312\Scripts", "$env:APPDATA\npm")
   $env:Path = (@($env:Path, $m, $u) + $extra | Where-Object { $_ }) -join ';'
 }
@@ -98,10 +118,6 @@ function Winget([string]$id, [string]$scope) {
   $c = Run 'downloading and installing' 'winget' $a
   Refresh-Path
   return ($c -eq 0 -or $c -eq -1978335189 -or $c -eq -1978335135)   # 0x8A15002B / 0x8A150061: already installed
-}
-function Code-Cli {
-  foreach ($c in @("$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd", "$env:ProgramFiles\Microsoft VS Code\bin\code.cmd")) { if (Test-Path $c) { return $c } }
-  $g = Get-Command code -ErrorAction SilentlyContinue; if ($g) { return $g.Source }; return $null
 }
 function Base-Python {   # a real (non-venv) Python 3.10+; prints its path or $null
   foreach ($try in @(@('py', '-3.12'), @('py', '-3'), @('python', ''))) {
@@ -117,16 +133,14 @@ function Node-Ok { if (-not (Has 'node')) { return $false }; try { $v = (& node 
 
 # ---------------------------------------------------------------- steps
 $Steps = @(
-  @{ n = 'Your Aura-Slide folder on C:';          f = 'Step-Folder' },
-  @{ n = 'VS Code (the app you will work in)';    f = 'Step-VSCode' },
-  @{ n = 'Git (needed by Claude on Windows)';     f = 'Step-Git' },
-  @{ n = 'Node.js (runs the 3D slide engine)';    f = 'Step-Node' },
-  @{ n = 'Python (makes PDF and PowerPoint)';     f = 'Step-Python' },
-  @{ n = 'Claude Code (the AI)';                  f = 'Step-Claude' },
-  @{ n = 'Claude inside VS Code';                 f = 'Step-Extension' },
-  @{ n = 'Slide engine: 3D and video tools';      f = 'Step-Npm' },
+  @{ n = 'Your Aura-Slide folder';                 f = 'Step-Folder' },
+  @{ n = 'Git (needed by Claude on Windows)';      f = 'Step-Git' },
+  @{ n = 'Node.js (runs the 3D slide engine)';     f = 'Step-Node' },
+  @{ n = 'Python (makes PDF and PowerPoint)';      f = 'Step-Python' },
+  @{ n = 'Claude Code (the AI)';                   f = 'Step-Claude' },
+  @{ n = 'Slide engine: 3D and video tools';       f = 'Step-Npm' },
   @{ n = 'Slide engine: PDF and PowerPoint tools'; f = 'Step-Pip' },
-  @{ n = 'Icon and shortcuts';                    f = 'Step-Shortcuts' }
+  @{ n = 'Icon and shortcuts';                     f = 'Step-Shortcuts' }
 )
 
 function Step-Folder {
@@ -142,17 +156,11 @@ function Step-Folder {
   Get-ChildItem (Join-Path $Root '.claude') -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'settings.local.json' } | Remove-Item -Recurse -Force
   Get-ChildItem (Join-Path $Repo 'engine') -Force | Where-Object { $_.Name -ne 'node_modules' } | Copy-Item -Destination (Join-Path $Aura 'engine') -Recurse -Force
   Copy-Item (Join-Path $Repo 'workspace\.claude') $Root -Recurse -Force   # includes the power-design skill (MIT, shipped in the repo)
-  Copy-Item (Join-Path $Repo 'workspace\.vscode') $Root -Recurse -Force
   Copy-Item (Join-Path $PSScriptRoot 'icon\aura-slide.ico') (Join-Path $Aura 'icon') -Force
   Copy-Item (Join-Path $PSScriptRoot 'aura.config.json') $Aura -Force
   $guide = Join-Path $Repo 'docs\1 - Read me first.pdf'; if (Test-Path $guide) { Copy-Item $guide $Root -Force }
-  foreach ($h in @('.aura', '.claude', '.vscode')) { (Get-Item (Join-Path $Root $h) -Force).Attributes = 'Directory, Hidden, System' }
+  foreach ($h in @('.aura', '.claude')) { (Get-Item (Join-Path $Root $h) -Force).Attributes = 'Directory, Hidden, System' }
   if ($made) { return 'created ' + $Root } else { return 'already there, your files are untouched' }
-}
-function Step-VSCode {
-  if (Code-Cli) { return 'HAVE' }
-  if (-not (Winget 'Microsoft.VisualStudioCode' 'user')) { throw 'VS Code could not be installed.' }
-  if (-not (Code-Cli)) { throw 'VS Code installed but not found.' }; 'installed'
 }
 function Step-Git {
   if (Has 'git') { return 'HAVE' }
@@ -174,14 +182,6 @@ function Step-Claude {
   $c = Run 'downloading Claude Code' 'powershell' '-NoProfile -ExecutionPolicy Bypass -Command "irm https://claude.ai/install.ps1 | iex"'
   Refresh-Path
   if (-not (Has 'claude')) { throw "Claude Code could not be installed (code $c)." }; 'installed'
-}
-function Step-Extension {
-  $code = Code-Cli; if (-not $code) { throw 'VS Code is missing.' }
-  $list = & $env:ComSpec /d /c ('"' + $code + '" --list-extensions 2>nul')
-  if ($list -contains $Config.claudeExtension) { return 'HAVE' }
-  $c = Run 'adding Claude to VS Code' $code ('--install-extension ' + $Config.claudeExtension)
-  $list = & $env:ComSpec /d /c ('"' + $code + '" --list-extensions 2>nul')
-  if ($list -notcontains $Config.claudeExtension) { throw "The Claude extension could not be added (code $c)." }; 'installed'
 }
 function Step-Npm {
   $eng = Join-Path $Aura 'engine'
@@ -208,6 +208,15 @@ function Step-Pip {
 }
 function Step-Shortcuts {
   $ico = Join-Path $Aura 'icon\aura-slide.ico'
+  # the app itself: AuraSlide.exe from this release (at its root), else the one that is running this setup
+  $exe = Join-Path $Aura 'AuraSlide.exe'
+  $src = @((Join-Path $Repo 'AuraSlide.exe'), $env:AURA_EXE) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+  if ($src -and ([IO.Path]::GetFullPath($src) -ne [IO.Path]::GetFullPath($exe))) {
+    try { Copy-Item $src $exe -Force } catch { Log ('could not copy AuraSlide.exe: ' + $_.Exception.Message) }   # in use: kept
+  }
+  $hasExe = Test-Path $exe
+  if ($hasExe) { Unblock-File $exe -ErrorAction SilentlyContinue }   # a copy keeps the "downloaded from the internet" mark
+  else { Log 'AuraSlide.exe is not in this release: the shortcuts open engine\start.ps1 instead' }
   # folder icon
   $ini = Join-Path $Root 'desktop.ini'
   if (Test-Path $ini) { (Get-Item $ini -Force).Attributes = 'Normal' }
@@ -220,47 +229,64 @@ function Step-Shortcuts {
     $l = $sh.CreateShortcut($path); $l.TargetPath = $target; $l.Arguments = $argz; $l.IconLocation = "$ico,0"
     $l.WorkingDirectory = $Root; $l.Description = $tip; $l.WindowStyle = $style; $l.Save()
   }
-  $run = { param($script) '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $Aura "engine\$script") + '"' }
-  Lnk (Join-Path $Root '2 - Fill in the form.lnk') $ps (& $run 'form.ps1') 'Tell Aura-Slide about your presentation' 7
-  Lnk (Join-Path $Root 'Start Aura-Slide.lnk') $ps (& $run 'start.ps1') 'Open Aura-Slide in VS Code' 7
-  Lnk (Join-Path $Root 'Update Aura-Slide.lnk') $ps ('-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $Aura 'engine\update.ps1') + '"') 'Get the newest Aura-Slide' 1
-  Lnk (Join-Path $Root 'Send problem report.lnk') $ps (& $run 'report.ps1') 'Make a zip you can send to Shafayat' 7
-  $desk = [Environment]::GetFolderPath('Desktop')
-  Lnk (Join-Path $desk 'Aura-Slide.lnk') "$env:SystemRoot\explorer.exe" ('"' + $Root + '"') 'Open your Aura-Slide folder'
-  $menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'Aura-Slide.lnk'
-  Lnk $menu $ps (& $run 'start.ps1') 'Open Aura-Slide in VS Code' 7
+  # old shortcuts from earlier versions: the desktop icon now opens, repairs and updates Aura-Slide by itself
+  foreach ($old in '2 - Start Aura-Slide.lnk', 'Start Aura-Slide.lnk', '2 - Fill in the form.lnk', 'Update Aura-Slide.lnk') {
+    $o = Join-Path $Root $old; if (Test-Path $o) { Remove-Item $o -Force }
+  }
+  Lnk (Join-Path $Root 'Send problem report.lnk') $ps ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $Aura 'engine\report.ps1') + '"') 'Make a zip you can send to Shafayat' 7
+  if ($TestInstall) {                                   # developer test install: keep the real Desktop and Start menu clean
+    $desk = Join-Path $Root 'Desktop (test)'; $menuDir = Join-Path $Root 'Start menu (test)'
+    foreach ($d in $desk, $menuDir) { New-Item -ItemType Directory -Force -Path $d | Out-Null }
+  } else {
+    $desk = [Environment]::GetFolderPath('Desktop'); $menuDir = [Environment]::GetFolderPath('Programs')
+  }
+  if ($hasExe) { $tgt = $exe; $argz = ''; $style = 1 }
+  else { $tgt = $ps; $argz = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $Aura 'engine\start.ps1') + '"'; $style = 7 }
+  Lnk (Join-Path $desk 'Aura-Slide.lnk') $tgt $argz 'Open Aura-Slide' $style
+  Lnk (Join-Path $menuDir 'Aura-Slide.lnk') $tgt $argz 'Open Aura-Slide' $style
   'Desktop icon + Start menu'
 }
 
 # ---------------------------------------------------------------- run
+$total = $Steps.Count
+Emit 0 'plan' 'plan' (($Steps | ForEach-Object { $_.n }) -join '|')
 Banner
 Line '  Checking this PC first...' 'White'
+$checkName = 'Checking this PC'
+Emit 0 $checkName 'start'
+function Early-Fail([string]$msg) { Bad $msg; Emit 0 $checkName 'fail' $msg; Stop-Here 1 }
 $os = [Environment]::OSVersion.Version
-if ($os.Major -lt 10) { Bad 'Aura-Slide needs Windows 10 or 11.'; Read-Host '  Press Enter to close'; exit 1 }
-$free = [math]::Round((Get-PSDrive C).Free / 1GB, 1)
-if ($free -lt 3) { Bad "Only $free GB free on drive C. Please free up at least 3 GB and run this again."; Read-Host '  Press Enter to close'; exit 1 }
+if ($os.Major -lt 10) { Early-Fail 'Aura-Slide needs Windows 10 or 11.' }
+$drive = (Split-Path -Qualifier $Root).TrimEnd(':')
+$free = [math]::Round((Get-PSDrive $drive).Free / 1GB, 1)
+if ($free -lt 3) { Early-Fail "Only $free GB free on drive $drive. Please free up at least 3 GB and run this again." }
 try { Invoke-WebRequest 'https://github.com' -Method Head -TimeoutSec 15 -UseBasicParsing | Out-Null }
-catch { Bad 'No internet connection. Connect to Wi-Fi and run this again.'; Read-Host '  Press Enter to close'; exit 1 }
+catch { Early-Fail 'No internet connection. Connect to Wi-Fi and run this again.' }
 if (-not (Has 'winget')) {
-  Bad 'Windows is missing "App Installer". The Microsoft Store will open: click Get or Update, then run this again.'
-  Start-Process 'ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1'; Read-Host '  Press Enter to close'; exit 1
+  Start-Process 'ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1'
+  Early-Fail 'Windows is missing "App Installer". The Microsoft Store has opened: click Get or Update there, then run this again.'
 }
 $gpu = (Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name) -join ', '
 Refresh-Path
+$winName = if ($os.Build -ge 22000) { 'Windows 11' } else { 'Windows 10' }
+Emit 0 $checkName 'ok' "$winName, $free GB free"
 
-$done = 0; $failed = @(); $total = $Steps.Count
+$done = 0; $failed = @()
 for ($k = 0; $k -lt $total; $k++) {
   $s = $Steps[$k]
   Banner; Overall $done $total
   for ($j = 0; $j -lt $k; $j++) { $r = $Steps[$j].r; if ($r -eq 'HAVE') { Skip $Steps[$j].n } elseif ($r -like 'FAIL*') { Bad ($Steps[$j].n + ' - ' + $r.Substring(5)) } else { Ok ($Steps[$j].n + ' - ' + $r) } }
-  Write-Host ('  ' + '>>'.PadRight(6)) -ForegroundColor Black -BackgroundColor Yellow -NoNewline; Write-Host (' ' + $s.n + ' ...')
+  if (-not $Json) { Write-Host ('  ' + '>>'.PadRight(6)) -ForegroundColor Black -BackgroundColor Yellow -NoNewline; Write-Host (' ' + $s.n + ' ...') }
+  Emit ($k + 1) $s.n 'start'
   try {
     $r = & $s.f
-    if ($k -eq 0) { $Log = Join-Path $Logs "setup_$Stamp.log"; Log "Aura-Slide setup $($Config.version)  Windows $os  free C: $free GB  GPU: $gpu" }
+    if ($k -eq 0) { $Log = Join-Path $Logs "setup_$Stamp.log"; Log "Aura-Slide setup $($Config.version)  Windows $os  free $drive`: $free GB  GPU: $gpu  root: $Root" }
     $s.r = [string]$r; Log ("OK  " + $s.n + ' : ' + $r)
+    if ($s.r -eq 'HAVE') { Emit ($k + 1) $s.n 'have' 'already on this PC' } else { Emit ($k + 1) $s.n 'ok' $s.r }
   } catch {
     $s.r = 'FAIL ' + $_.Exception.Message; $failed += $s.n; Log ('ERR ' + $s.n + ' : ' + $_.Exception.Message)
-    if ($k -eq 0) { Banner; Bad ('Could not make ' + $Root + ': ' + $_.Exception.Message); Read-Host '  Press Enter to close'; exit 1 }
+    Emit ($k + 1) $s.n 'fail' $_.Exception.Message
+    if ($k -eq 0) { Banner; Bad ('Could not make ' + $Root + ': ' + $_.Exception.Message); Stop-Here 1 }
   }
   $done++
 }
@@ -269,20 +295,21 @@ Banner; Overall $done $total
 foreach ($s in $Steps) { if ($s.r -eq 'HAVE') { Skip $s.n } elseif ($s.r -like 'FAIL*') { Bad ($s.n + ' - ' + $s.r.Substring(5)) } else { Ok ($s.n + ' - ' + $s.r) } }
 Line ''
 if ($failed.Count) {
-  Line '  Some parts did not install. Run "Setup Aura-Slide" again - it continues where it stopped.' 'Yellow'
+  Line '  Some parts did not install. Run the setup again - it continues where it stopped.' 'Yellow'
   Line '  Still stuck? Open your Aura-Slide folder and double-click "Send problem report".' 'Yellow'
-  Line ''; Read-Host '  Press Enter to close'; exit 1
+  Line ''; Stop-Here 1
 }
-Line '  All done!  Your folder:  C:\Aura-Slide by Shafayat   (also on your Desktop as "Aura-Slide")' 'Green'
+Line ('  All done!  Your folder:  ' + $Root) 'Green'
+Line '  Next time, open Aura-Slide with the "Aura-Slide" icon on your Desktop.' 'Green'
 Line ''
 Line '  What happens now:' 'White'
-Line '    1. The form opens in your browser. Fill it in and click Save.'
-Line '    2. VS Code opens. Click the Claude icon, then "Sign in", and click Authorize in the browser.'
-Line '    3. In the Claude box, type:   show your aura' 'Cyan'
+Line '    1. Aura-Slide opens in its own window. Answer the questions and drop in your files.'
+Line '    2. Click   make my slides   at the end. The first time, sign in to Claude when asked.' 'Cyan'
+Line '    3. Watch Claude build your slides, and answer its questions in the chat.'
 Line ''
 if (-not $NoLaunch) {
-  Start-Process 'explorer.exe' ('"' + $Root + '"')
-  & (Join-Path $Aura 'engine\form.ps1')
-  & (Join-Path $Aura 'engine\start.ps1') -Quiet
+  $app = Join-Path $Aura 'AuraSlide.exe'
+  if (Test-Path $app) { Start-Process -FilePath $app } else { & (Join-Path $Aura 'engine\form.ps1') }
 }
-Read-Host '  Press Enter to close this window'
+if (-not $Json) { Read-Host '  Press Enter to close this window' | Out-Null }
+exit 0

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scenes3d harness</title>
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.js"}}</script>
+<style>
+@font-face{font-family:'DM Sans';src:url('/fonts/DMSans-Regular.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:Epilogue;src:url('/fonts/Epilogue-Black.woff2') format('woff2');font-weight:900;font-style:normal;font-display:swap}
+:root{--ink:#080909;--pill:#f7f8fa;--bg:#EEEDF9;--lilac:#c9c3ef}
+html,body{margin:0;height:100%;overflow:hidden;background:#dcdaea;font:14px 'DM Sans',system-ui,sans-serif;color:var(--ink);font-synthesis:none}
+#wrap{position:absolute;left:0;top:0;right:320px;bottom:0}
+#stage{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0;overflow:hidden;background:var(--bg)}
+#char{position:absolute;left:300px;top:337px;width:1000px;height:563px;transition:all .7s cubic-bezier(.2,.7,.2,1)}
+#char.full{left:0;top:0;width:1600px;height:900px}
+#char video{display:block;width:100%;height:100%;object-fit:cover;background:var(--bg)}
+#welcomeLayer{position:absolute;inset:0;z-index:1;pointer-events:none}
+#illus{position:absolute;left:470px;top:70px;width:660px;height:390px;z-index:2}
+#illus.outline{outline:1px dashed rgba(8,9,9,.25)}
+.scene-host{position:absolute;inset:0}
+#panel{position:absolute;right:0;top:0;bottom:0;width:320px;box-sizing:border-box;padding:14px 16px;background:var(--pill);overflow:auto}
+#panel h1{font:900 22px Epilogue;margin:0 0 10px}
+#panel h2{font:900 14px Epilogue;margin:16px 0 6px;letter-spacing:.02em}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}
+button,select{font:inherit;border:0;border-radius:100px;padding:6px 12px;background:#e9e6f6;color:var(--ink);cursor:pointer}
+button.on{background:var(--ink);color:var(--pill)}
+input[type=range]{width:180px}
+#stats{font:13px ui-monospace,Consolas,monospace;white-space:pre;background:#fff;border-radius:12px;padding:8px 10px;margin-top:8px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <div id="char"><video id="charVideo" muted playsinline preload="auto" src="/assets/character.mp4"></video></div>
+    <div id="welcomeLayer"></div>
+    <div id="illus" class="outline"></div>
+  </div>
+</div>
+<div id="panel">
+  <h1>scenes3d</h1>
+  <div class="row" id="sceneBtns"></div>
+  <div class="row">
+    <button id="threeBtn" class="on">three: ok</button>
+    <button id="rmBtn">reduced motion: off</button>
+    <button id="outlineBtn" class="on">zone outline</button>
+  </div>
+  <div class="row"><button id="remount">remount</button><button id="unmount">unmount</button><button id="stress">mount/destroy x10</button></div>
+
+  <h2>style</h2>
+  <div class="row"><span>3D</span><button data-k="style.threeD" data-v="yes" class="on">yes</button><button data-k="style.threeD" data-v="no">no</button></div>
+  <div class="row"><span>2D</span><button data-k="style.twoD" data-v="yes" class="on">yes</button><button data-k="style.twoD" data-v="no">no</button></div>
+  <div class="row"><span>amount</span><input id="amount" type="range" min="0" max="100" value="60"><b id="amountV">60</b></div>
+
+  <h2>workshop (claude:event)</h2>
+  <div class="row"><button id="fakeRun">fake run</button><button id="fakeReply">fake reply</button></div>
+  <div class="row">
+    <button data-ev="read">Read</button><button data-ev="write">Write</button><button data-ev="edit">Edit</button>
+    <button data-ev="bash">Bash</button><button data-ev="err">tool-error</button>
+  </div>
+  <div class="row">
+    <button data-stage="read">read</button><button data-stage="plan">plan</button><button data-stage="build">build</button>
+    <button data-stage="check">check</button><button data-stage="export">export</button><button data-stage="done">done</button>
+  </div>
+  <div class="row"><button data-ev="ask">ask (waiting)</button><button data-ev="user">user reply</button><button data-ev="doneOk">done ok</button><button data-ev="doneFail">done fail</button><button data-ev="limit">limit</button></div>
+  <div id="stats"></div>
+</div>
+
+<script type="module">
+import { bus, emit } from '/js/bus.js';
+import { kitStats } from '/js/scenes/three-kit.js';
+
+const $ = s => document.querySelector(s);
+const stage = $('#stage'), wrap = $('#wrap'), charBox = $('#char');
+function fit() {
+  const s = Math.min(wrap.clientWidth / 1600, wrap.clientHeight / 900);
+  stage.style.transform = `scale(${s})`;
+}
+addEventListener('resize', fit); fit();
+const video = $('#charVideo');
+video.addEventListener('loadeddata', () => { try { video.currentTime = 0.34; } catch (e) {} });
+
+const state = { style: { threeD: 'yes', twoD: 'yes', amount: 60 } };
+const opts = { three: 'ok', reduced: false };
+const ctx = {
+  bus,
+  audio: { start() {}, setMusic() {}, setSfx() {}, setVolume() {}, sfx() {}, state: () => ({ music: false, sfx: false }) },
+  getState: () => state,
+  get reducedMotion() { return opts.reduced; },
+  get amount() { return state.style.amount; },
+  three: () => (opts.three === 'ok' ? import('three') : Promise.reject(new Error('three blocked by harness'))),
+};
+
+let inst = null, host = null, current = 'style';
+const SCENES = ['welcome', 'style', 'workshop'];
+async function mount(name = current) {
+  unmount();
+  current = name;
+  document.querySelectorAll('#sceneBtns button').forEach(b => b.classList.toggle('on', b.textContent === name));
+  charBox.classList.toggle('full', name === 'welcome');
+  host = document.createElement('div');
+  host.className = 'scene-host';
+  (name === 'welcome' ? $('#welcomeLayer') : $('#illus')).append(host);
+  const mod = await import(`/js/scenes/${name}.js`);
+  inst = await mod.default.mount(host, ctx);
+  inst.update(state);
+  return inst;
+}
+function unmount() {
+  if (inst) { inst.destroy(); inst = null; }
+  if (host) { host.remove(); host = null; }
+}
+SCENES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => mount(n); $('#sceneBtns').append(b); });
+
+$('#threeBtn').onclick = e => { opts.three = opts.three === 'ok' ? 'reject' : 'ok'; e.target.textContent = 'three: ' + opts.three; e.target.classList.toggle('on', opts.three === 'ok'); mount(); };
+$('#rmBtn').onclick = e => { opts.reduced = !opts.reduced; e.target.textContent = 'reduced motion: ' + (opts.reduced ? 'on' : 'off'); mount(); };
+$('#outlineBtn').onclick = e => { e.target.classList.toggle('on', $('#illus').classList.toggle('outline')); };
+$('#remount').onclick = () => mount();
+$('#unmount').onclick = () => unmount();
+$('#stress').onclick = () => stress(10);
+
+function setKey(key, value) {
+  const [a, b] = key.split('.');
+  state[a][b] = value;
+  emit('state:change', { key, value, state });
+  if (inst) inst.update(state);
+}
+document.querySelectorAll('[data-k]').forEach(b => b.onclick = () => {
+  setKey(b.dataset.k, b.dataset.v);
+  document.querySelectorAll(`[data-k="${b.dataset.k}"]`).forEach(x => x.classList.toggle('on', x === b));
+});
+$('#amount').oninput = e => { $('#amountV').textContent = e.target.value; setKey('style.amount', +e.target.value); };
+
+// ---- fake Claude events
+let seq = 1000;
+const ev = (kind, extra = {}) => { const event = { i: seq++, t: Date.now() / 1000, kind, ...extra }; emit('claude:event', { event }); return event; };
+const tool = (name, detail) => ev('tool', { tool: name, detail, text: `${name} ${detail}` });
+const say = text => ev('say', { text });
+const EV = {
+  read: () => tool('Read', 'Report/thesis_final.pdf'),
+  write: () => tool('Write', '4 - Your slides/My talk.html'),
+  edit: () => tool('Edit', '4 - Your slides/My talk.html'),
+  bash: () => tool('Bash', 'node .aura/engine/tools/export_pdf.js'),
+  err: () => ev('tool-error', { tool: 'Bash', text: 'command failed' }),
+  ask: () => { say('Which results should go first?\n[[aura:ask]]'); ev('done', { ok: true, text: 'waiting' }); emit('claude:state', { running: false, waiting: true, done: false }); },
+  user: () => { ev('user', { text: 'Start with the efficiency numbers.' }); emit('claude:state', { running: true, waiting: false, done: false }); },
+  doneOk: () => { say('[[aura:stage=done]]\n[[aura:done path="4 - Your slides/My talk.html"]]\nYour slides are ready.'); ev('done', { ok: true, text: 'finished' }); emit('claude:state', { running: false, waiting: false, done: true }); },
+  doneFail: () => { ev('error', { text: 'Something went wrong' }); ev('done', { ok: false, text: 'failed' }); emit('claude:state', { running: false, waiting: false, done: false }); },
+  limit: () => { ev('limit', { text: 'Usage limit reached' }); emit('claude:state', { running: false, waiting: false, done: false }); },
+};
+document.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => EV[b.dataset.ev]());
+document.querySelectorAll('[data-stage]').forEach(b => b.onclick = () => say(`[[aura:stage=${b.dataset.stage}]]\nStage ${b.dataset.stage}.`));
+
+const wait = ms => new Promise(r => setTimeout(r, ms));
+let runToken = 0;
+async function fakeRun(fast = 1) {
+  const my = ++runToken;
+  const steps = [
+    () => { emit('claude:state', { running: true, waiting: false, done: false }); ev('status', { text: 'Claude is starting' }); },
+    () => say('[[aura:stage=read]]\nReading your brief and files.'),
+    () => tool('Read', 'Report/thesis_final.pdf'), () => tool('Read', 'Images and photos/setup.jpg'), () => tool('Read', 'Journal papers/xu2005.pdf'),
+    () => say('[[aura:stage=plan]]\nPlanning 12 slides for a 10 minute talk.'),
+    () => say('[[aura:stage=build]]\nBuilding the slides in the Bold Blue look.'),
+    () => tool('Write', '4 - Your slides/My talk.html'), () => tool('Edit', '4 - Your slides/My talk.html'), () => tool('Edit', '4 - Your slides/My talk.html'),
+    () => tool('Bash', 'node .aura/engine/tools/check_deck.js'), () => tool('Edit', '4 - Your slides/My talk.html'),
+    () => say('[[aura:stage=check]]\nChecking every slide.'), () => tool('Bash', 'node .aura/engine/tools/shots.js'),
+    () => say('[[aura:stage=export]]\nMaking the PDF backup.'), () => tool('Bash', 'node .aura/engine/tools/export_pdf.js'),
+    () => EV.doneOk(),
+  ];
+  for (const s of steps) { if (my !== runToken) return; s(); await wait(1500 / fast); }
+}
+$('#fakeRun').onclick = () => fakeRun();
+$('#fakeReply').onclick = async () => { EV.user(); await wait(900); tool('Edit', '4 - Your slides/My talk.html'); await wait(1500); EV.doneOk(); };
+
+async function stress(n) {
+  for (let k = 0; k < n; k++) { await mount(); await wait(120); }
+  return { ...kitStats };
+}
+
+setInterval(() => {
+  const s = kitStats;
+  $('#stats').textContent = `scene    ${current}${inst && inst.debug ? ' (' + inst.debug.mode + ')' : ''}\nlive gl  ${s.live}\ncreated  ${s.created}\ndisposed ${s.disposed}\nevicted  ${s.evicted}\nframe    ${s.frameMs.toFixed(1)} ms\nwork     ${s.workMs.toFixed(2)} ms`;
+}, 400);
+
+window.H = { mount, unmount, stress, setKey, fakeRun, EV, say, tool, state, opts, kitStats, get inst() { return inst; } };
+const q = new URLSearchParams(location.search);
+if (q.get('three') === 'reject') { opts.three = 'reject'; $('#threeBtn').textContent = 'three: reject'; $('#threeBtn').classList.remove('on'); }
+if (q.get('rm') === '1') opts.reduced = true;
+mount(q.get('scene') || 'style');
+</script>
+</body>
+</html>

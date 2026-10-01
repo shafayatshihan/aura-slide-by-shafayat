@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2D scenes harness</title>
+<link rel="icon" href="data:,">
+<style>
+@font-face{font-family:'DM Sans';src:url('/fonts/DMSans-Regular.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:Epilogue;src:url('/fonts/Epilogue-Black.woff2') format('woff2');font-weight:900;font-style:normal;font-display:swap}
+:root{--ink:#080909;--pill:#f7f8fa;--bg:#EEEDF9;--lilac:#c9c3ef}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 'DM Sans',system-ui,sans-serif;font-synthesis:none}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:14px 18px}
+h1{font:900 20px Epilogue,sans-serif;margin:0 14px 0 0}
+button,select,input,textarea{font:inherit;color:inherit}
+button{border:0;background:var(--pill);border-radius:100px;padding:6px 14px;cursor:pointer}
+button.on{background:var(--ink);color:var(--pill)}
+main{display:flex;gap:20px;padding:0 18px 18px;align-items:flex-start}
+#box{position:relative;width:660px;height:390px;flex:none;outline:1px dashed #c9c3ef;background:var(--bg)}
+#box.big{transform:scale(1.5);transform-origin:0 0;margin:0 330px 195px 0}
+#editor{flex:1;min-width:300px;display:grid;grid-template-columns:150px 1fr;gap:6px 10px;align-items:center;max-width:620px}
+#editor label{font-size:13px;color:#5b5470}
+#editor input[type=text],#editor input[type=number],#editor input[type=date],#editor select,#editor textarea{width:100%;border:0;border-radius:10px;padding:6px 10px;background:var(--pill)}
+#editor .checks{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px}
+#editor .row{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+#log{font:12px ui-monospace,monospace;white-space:pre-wrap;max-height:120px;overflow:auto;padding:0 18px;color:#5b5470}
+</style>
+</head>
+<body>
+<header>
+  <h1>2d scenes</h1>
+  <span id="tabs"></span>
+  <button id="sample">fill sample</button>
+  <button id="clear">clear</button>
+  <button id="remount">remount</button>
+  <button id="destroy">destroy</button>
+  <label><input type="checkbox" id="rm"> reduced motion</label>
+  <label><input type="checkbox" id="zoom"> zoom 1.5x</label>
+  <label>screen <select id="screen"></select></label>
+</header>
+<main>
+  <div id="box"></div>
+  <div id="editor"></div>
+</main>
+<div id="log"></div>
+<script type="module">
+import { mountScene } from '/js/scenes/index.js';
+import { bus, emit } from '/js/bus.js';
+
+const SCENES = ['talk', 'people', 'audience', 'work', 'results', 'files', 'extras', 'review'];
+const SCREENS = { talk: ['type', 'title', 'when'], people: ['presenters', 'supervisor'], audience: ['audience', 'time'], work: ['work', 'why'],
+  results: ['results', 'status'], files: [1, 2, 3, 4, 5, 6, 7].map(n => 'files-' + n), extras: ['content', 'where', 'help', 'extra'], review: ['plan', 'review'] };
+const FOLDERS = ['Report', 'Images and photos', 'Data (csv, excel, graphs)', 'Logo and university template', 'Previous year reports', 'Journal papers', 'Anything else'];
+const TYPES = ['Thesis defence', 'Thesis progress / interim', 'Project presentation', 'Class presentation', 'Seminar', 'Conference talk', 'Proposal', 'Lecture', 'Other'];
+const WHO = ['Examiners / teachers', 'Classmates', 'Researchers / experts', 'Industry', 'General public', 'School students'];
+const INCLUDE = ['Equations', 'Tables', 'Charts from my data', 'My photos', 'Videos', 'References slide', 'Acknowledgements slide', 'Thank you and questions slide', 'Contact details'];
+const LOOKS = ['Claude chooses', 'Pink Punch', 'Bold Blue', 'Flat-Pack', 'Happy Headspace', 'Yellow Frame'];
+
+// Field specs per scene: [key, kind, options]. kinds: text, area, date, num, select, checks, people, results, slides, bool.
+const T = [['basics.type', 'select', ['', ...TYPES]], ['basics.typeOther', 'text'], ['basics.title', 'area'], ['basics.subtitle', 'text'], ['basics.date', 'date'], ['basics.event', 'text']];
+const P = [['people.presenters', 'people'], ['people.supervisor', 'text'], ['people.supervisorTitle', 'text'], ['people.institution', 'text'], ['people.department', 'text']];
+const SPEC = {
+  talk: T, people: P,
+  audience: [['audience.who', 'checks', WHO], ['audience.level', 'select', ['New to the topic', 'Some background', 'Experts']], ['audience.minutes', 'num'], ['audience.qa', 'num'], ['audience.slides', 'num']],
+  work: [['work.field', 'text'], ['work.summary', 'area'], ['work.problem', 'area'], ['work.method', 'area']],
+  results: [['work.results', 'results'], ['work.message', 'area'], ['work.status', 'select', ['', 'Finished', 'Still going']], ['work.next', 'area']],
+  files: [],
+  extras: [['content.include', 'checks', INCLUDE], ['content.citations', 'select', ['', 'IEEE', 'APA', 'Harvard', 'My department’s style']],
+    ['delivery.where', 'checks', ['Projector in a room', 'Big TV', 'Online meeting', 'Phone']], ['delivery.offline', 'select', ['No internet - must work offline', 'Internet available']],
+    ['delivery.backups', 'checks', ['PDF', 'PowerPoint']], ['delivery.help', 'checks', ['Speaker notes', 'Timed speaker script']], ['delivery.clicker', 'select', ['Not sure', 'Yes', 'No']],
+    ['extra.avoid', 'text'], ['extra.deadline', 'date'], ['extra.notes', 'area']],
+  review: [['look.theme', 'select', LOOKS], ['plan.auto', 'bool'], ['plan.slides', 'slides'], ...T.slice(0, 1), ['basics.title', 'area'], ['basics.date', 'date'], ['basics.event', 'text'], ['people.presenters', 'people'], ['people.supervisor', 'text']],
+};
+const DEFAULTS = () => ({ basics: {}, people: { presenters: [{ name: '', id: '', role: '' }] }, audience: { level: 'Some background' },
+  work: { results: [{ what: '', value: '' }] }, look: { theme: 'Claude chooses' }, style: { amount: 60, threeD: 'yes', twoD: 'yes' }, plan: { auto: true },
+  content: { include: ['References slide', 'Thank you and questions slide'] }, delivery: { where: ['Projector in a room'], offline: 'No internet - must work offline', backups: ['PDF'], help: ['Speaker notes'], clicker: 'Not sure' }, extra: {} });
+const SAMPLE = () => ({
+  basics: { type: 'Thesis defence', title: 'Transient and spectral behaviour of a closed-loop pulsating heat pipe under sub-atmospheric pressures', subtitle: 'ME 400 final thesis, binary and self-rewetting fluids', date: '2026-10-14', event: 'ME 400 Project and Thesis' },
+  people: { presenters: [{ name: 'S. M. Shafayat Islam', id: '2110072', role: 'lead' }, { name: 'Md. Sadman Sakib', id: '2110091', role: 'experiments' }, { name: 'Nadia Rahman', id: '', role: '' }],
+    supervisor: 'Prof. Dr. Aloke Kumar Mozumder', supervisorTitle: 'Professor, ME', institution: 'BUET', department: 'Mechanical Engineering' },
+  audience: { who: ['Examiners / teachers', 'Classmates', 'Researchers / experts'], level: 'Experts', minutes: 15, qa: 5, slides: '' },
+  work: { field: 'Thermal engineering', summary: 'We built a pulsating heat pipe rig and measured how vacuum level and fluid choice change its heat transfer.',
+    problem: 'Electronics run hot and passive cooling is cheap.', method: 'Thermocouples, an Arduino logger and FFT analysis.',
+    results: [{ what: 'Lower thermal resistance', value: '38%' }, { what: 'Startup power', value: '7.5 W' }, { what: 'Dominant frequency', value: '0.12 Hz' }, { what: 'Runs logged', value: '42' }],
+    message: 'A deeper vacuum makes the heat pipe start sooner and run cooler.', status: 'Finished', next: 'Try nanofluids' },
+  look: { theme: 'Pink Punch' }, style: { amount: 60, threeD: 'yes', twoD: 'yes' }, plan: { auto: false, slides: [{ title: 'Why heat pipes' }, { title: 'The rig' }, { title: 'Results' }, { title: 'Spectra' }, { title: 'What next' }] },
+  content: { include: ['Equations', 'Charts from my data', 'My photos', 'References slide', 'Thank you and questions slide'], citations: 'IEEE' },
+  delivery: { where: ['Projector in a room', 'Online meeting'], offline: 'Internet available', backups: ['PDF', 'PowerPoint'], help: ['Speaker notes', 'Timed speaker script'], clicker: 'Yes' },
+  extra: { avoid: 'no jokes', deadline: '2026-10-10', notes: 'keep it calm' },
+});
+
+let state = DEFAULTS(), current = 'talk', inst = null, token = 0;
+const box = document.getElementById('box'), editor = document.getElementById('editor'), logEl = document.getElementById('log');
+const log = s => { logEl.textContent = (s + '\n' + logEl.textContent).slice(0, 3000); };
+const getKey = k => k.split('.').reduce((o, p) => (o == null ? undefined : o[p]), state);
+function setKey(k, v) {
+  const ks = k.split('.'); let o = state;
+  for (const p of ks.slice(0, -1)) { if (typeof o[p] !== 'object' || o[p] === null) o[p] = {}; o = o[p]; }
+  o[ks[ks.length - 1]] = v;
+  emit('state:change', { key: k, value: v, state });
+  inst && inst.update(state);
+}
+const ctx = { bus, getState: () => state, amount: 60, three: () => import('three'),
+  audio: { sfx() {}, start() {}, setMusic() {}, setSfx() {}, setVolume() {}, state: () => ({ music: false, sfx: false }) },
+  get reducedMotion() { return document.getElementById('rm').checked; } };
+
+async function mount(name = current) {
+  current = name; const my = ++token;
+  if (inst) { inst.destroy(); inst = null; }
+  box.replaceChildren();
+  const host = document.createElement('div'); host.className = 'scene-host'; host.style.cssText = 'position:absolute;inset:0';
+  box.append(host);
+  const i = await mountScene(name, host, ctx);
+  if (my !== token) { i.destroy(); return; }
+  inst = i; inst.update(state);
+  paintTabs(); paintEditor(); paintScreens();
+  log('mounted ' + name);
+}
+function destroy() { token++; if (inst) inst.destroy(); inst = null; log('destroyed; nodes left in box: ' + box.querySelectorAll('.scene-host *').length); }
+
+function paintTabs() {
+  document.getElementById('tabs').replaceChildren(...SCENES.map(n => { const b = document.createElement('button'); b.textContent = n; b.className = n === current ? 'on' : ''; b.onclick = () => mount(n); return b; }));
+}
+function paintScreens() {
+  const s = document.getElementById('screen');
+  s.replaceChildren(...['', ...SCREENS[current]].map(v => new Option(v || '(none)', v)));
+}
+document.getElementById('screen').onchange = e => {
+  const id = e.target.value, n = /^files-(\d)$/.exec(id);
+  const step = { id, ...(n ? { folder: { name: FOLDERS[n[1] - 1] } } : {}) };
+  emit('step:change', { from: null, to: id, step });
+  log('step:change ' + id);
+};
+
+const lines = (v, keys) => (v || []).map(o => keys.map(k => o[k] || '').join(' | ')).join('\n');
+const unlines = (s, keys) => s.split('\n').filter(l => l.trim() !== '' || keys.length === 0).map(l => { const p = l.split('|').map(x => x.trim()); return Object.fromEntries(keys.map((k, i) => [k, p[i] || ''])); });
+function field(key, kind, opts) {
+  const lab = document.createElement('label'); lab.textContent = key;
+  let inp; const v = getKey(key);
+  if (kind === 'select') { inp = document.createElement('select'); opts.forEach(o => inp.add(new Option(o || '(empty)', o))); inp.value = v ?? ''; inp.onchange = () => setKey(key, inp.value); }
+  else if (kind === 'checks') {
+    inp = document.createElement('div'); inp.className = 'checks';
+    opts.forEach(o => { const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.checked = (v || []).includes(o); c.dataset.v = o;
+      c.onchange = () => setKey(key, [...inp.querySelectorAll('input:checked')].map(x => x.dataset.v)); l.append(c, ' ' + o); inp.append(l); });
+  } else if (kind === 'bool') { inp = document.createElement('input'); inp.type = 'checkbox'; inp.checked = !!v; inp.onchange = () => setKey(key, inp.checked); }
+  else if (['people', 'results', 'slides', 'area'].includes(kind)) {
+    inp = document.createElement('textarea'); inp.rows = 3;
+    const keys = kind === 'people' ? ['name', 'id', 'role'] : kind === 'results' ? ['what', 'value'] : kind === 'slides' ? ['title', 'covers'] : null;
+    if (keys) inp.placeholder = keys.join(' | ') + ' (one per line)';
+    inp.value = keys ? lines(v, keys) : (v ?? '');
+    inp.oninput = () => setKey(key, keys ? unlines(inp.value, keys) : inp.value);
+  } else {
+    inp = document.createElement('input'); inp.type = kind === 'num' ? 'number' : kind === 'date' ? 'date' : 'text'; inp.value = v ?? '';
+    inp.oninput = () => setKey(key, kind === 'num' ? (inp.value === '' ? '' : +inp.value) : inp.value);
+  }
+  inp.dataset.key = key;
+  return [lab, inp];
+}
+function paintEditor() {
+  const kids = [];
+  for (const [k, kind, o] of SPEC[current]) kids.push(...field(k, kind, o));
+  if (current === 'files') {
+    const lab = document.createElement('label'); lab.textContent = 'file name';
+    const name = document.createElement('input'); name.type = 'text'; name.id = 'fname'; name.value = 'results_table.xlsx';
+    const folder = document.createElement('select'); folder.id = 'ffolder'; FOLDERS.forEach(f => folder.add(new Option(f, f)));
+    const flab = document.createElement('label'); flab.textContent = 'folder';
+    const row = document.createElement('div'); row.className = 'row';
+    const b = (t, fn) => { const x = document.createElement('button'); x.textContent = t; x.onclick = fn; row.append(x); };
+    b('dragover', () => emit('files:dragover', {}));
+    b('dragleave', () => emit('files:dragleave', {}));
+    b('drop x3', () => emit('files:drop', { folder: folder.value, count: 3 }));
+    b('uploaded', () => emit('files:uploaded', { folder: folder.value, name: name.value, size: 123456 }));
+    b('upload 3 mixed', () => ['a.pdf', 'photo.jpg', 'data.csv'].forEach((n, i) => setTimeout(() => emit('files:uploaded', { folder: folder.value, name: n, size: 1000 }), i * 450)));
+    kids.push(flab, folder, lab, name, row);
+  }
+  editor.replaceChildren(...kids);
+}
+
+document.getElementById('sample').onclick = () => { state = SAMPLE(); emit('state:change', { key: '*', state }); inst && inst.update(state); paintEditor(); };
+document.getElementById('clear').onclick = () => { state = DEFAULTS(); emit('state:change', { key: '*', state }); inst && inst.update(state); paintEditor(); };
+document.getElementById('remount').onclick = () => mount();
+document.getElementById('destroy').onclick = destroy;
+document.getElementById('zoom').onchange = e => box.classList.toggle('big', e.target.checked);
+window.addEventListener('error', e => log('ERROR ' + e.message));
+
+const q = new URLSearchParams(location.search);
+if (q.get('rm')) document.getElementById('rm').checked = true;
+// Test hooks for Playwright.
+window.H = { mount, destroy, emit, set: setKey, get: getKey,
+  setState(s) { state = s; inst && inst.update(state); paintEditor(); }, sample: () => document.getElementById('sample').click(),
+  clear: () => document.getElementById('clear').click(), get current() { return current; }, get state() { return state; } };
+mount(q.get('scene') || 'talk');
+</script>
+</body>
+</html>

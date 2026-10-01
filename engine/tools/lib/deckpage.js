@@ -1,0 +1,114 @@
+// Shared helpers for the Aura deck tools: find the Aura folder, serve it over a private local web server
+// (ES modules and three.js do not load from file:// pages), start Microsoft Edge, open a deck in all-slides mode.
+'use strict';
+const fs = require('fs'), path = require('path'), http = require('http');
+
+const ENGINE = path.resolve(__dirname, '..', '..');
+
+function findAuraRoot(start) {
+  let dir = path.resolve(start);
+  if (fs.existsSync(dir) && fs.statSync(dir).isFile()) dir = path.dirname(dir);
+  for (let d = dir; ; d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, '.aura')) && fs.statSync(path.join(d, '.aura')).isDirectory()) return d;
+    if (path.dirname(d) === d) break;
+  }
+  const env = process.env.CLAUDE_PROJECT_DIR;
+  if (env && fs.existsSync(path.join(env, '.aura'))) return path.resolve(env);
+  return fs.existsSync(path.join(process.cwd(), '.aura')) ? process.cwd() : null;
+}
+
+// a deck argument may be a build folder (uses its index.html) or an .html file
+function resolveDeck(arg) {
+  if (!arg) throw new Error('Tell me which deck: a build folder or an .html file.');
+  let p = path.resolve(arg);
+  if (fs.existsSync(p) && fs.statSync(p).isDirectory()) p = path.join(p, 'index.html');
+  if (!fs.existsSync(p)) throw new Error('Deck not found: ' + p);
+  return p;
+}
+
+// the folder to serve: the Aura root when the deck is inside it (build decks reach ../../../engine), else the deck's folder
+function serveRootFor(deck) {
+  const root = findAuraRoot(deck);
+  const rel = root ? path.relative(root, deck) : '..';
+  return root && !rel.startsWith('..') ? root : path.dirname(deck);
+}
+
+const MIME = { '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+  '.webp': 'image/webp', '.avif': 'image/avif', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.woff': 'font/woff',
+  '.ttf': 'font/ttf', '.otf': 'font/otf', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.txt': 'text/plain; charset=utf-8' };
+
+// tiny static server confined to `root`; follows the .aura/engine junction like the browser would
+function serve(root) {
+  root = path.resolve(root);
+  const srv = http.createServer((req, res) => {
+    let rel;
+    try { rel = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch (e) { res.writeHead(400); return res.end(); }
+    const file = path.resolve(root, '.' + rel);
+    if (file !== root && !file.startsWith(root + path.sep)) { res.writeHead(403); return res.end(); }
+    fs.stat(file, (err, st) => {
+      if (err || !st.isFile()) { res.writeHead(404); return res.end('not found'); }
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+        'Content-Length': st.size, 'Cache-Control': 'no-store' });
+      fs.createReadStream(file).pipe(res);
+    });
+  });
+  return new Promise((ok, fail) => {
+    srv.once('error', fail);
+    srv.listen(0, '127.0.0.1', () => {
+      const origin = 'http://127.0.0.1:' + srv.address().port;
+      ok({ origin, root,
+        url: f => origin + '/' + path.relative(root, f).split(path.sep).map(encodeURIComponent).join('/'),
+        close: () => new Promise(r => { srv.closeAllConnections && srv.closeAllConnections(); srv.close(() => r()); }) });
+    });
+  });
+}
+
+function playwright() {
+  try { return require(path.join(ENGINE, 'node_modules', 'playwright-core')); }
+  catch (e) { return require('playwright-core'); }
+}
+async function launch() {
+  const { chromium } = playwright();
+  try { return await chromium.launch({ channel: 'msedge' }); }
+  catch (e) {
+    try { return await chromium.launch({ channel: 'chrome' }); }
+    catch (e2) { throw new Error('Microsoft Edge could not be started for the check: ' + e.message.split('\n')[0]); }
+  }
+}
+
+// open a deck in all-slides mode and wait until the runtime says it is ready (3D stills rendered, fonts loaded)
+async function openDeck(page, url, { mode = 'all', timeout = 60000 } = {}) {
+  await page.goto(url + (mode ? (url.includes('?') ? '&' : '?') + 'aura=' + mode : ''), { waitUntil: 'load', timeout });
+  await page.waitForFunction(() => !window.Aura || document.documentElement.dataset.auraReady === '1', null, { timeout }).catch(() => {});
+  await page.evaluate(() => document.fonts && document.fonts.ready);
+  await page.waitForTimeout(150);
+}
+
+// one PNG per slide (slides are 1920 x 1080 elements in all-slides mode)
+async function shootSlides(page, outDir, { prefix = 'slide-' } = {}) {
+  fs.mkdirSync(outDir, { recursive: true });
+  for (const f of fs.readdirSync(outDir)) if (f.startsWith(prefix) && f.endsWith('.png')) fs.unlinkSync(path.join(outDir, f));
+  const handles = await page.$$('.deck > .slide, body > .slide');
+  const files = [];
+  for (let i = 0; i < handles.length; i++) {
+    const file = path.join(outDir, prefix + String(i + 1).padStart(2, '0') + '.png');
+    await handles[i].screenshot({ path: file, animations: 'disabled' });
+    files.push(file);
+  }
+  return files;
+}
+
+async function slideInfo(page) {
+  return page.evaluate(() => {
+    if (window.Aura && Aura.slides) return Aura.slides();
+    return Array.from(document.querySelectorAll('.slide'), (s, i) => ({ index: i, number: i + 1,
+      title: (s.querySelector('h1,h2,h3') || {}).textContent || '', notes: '', minutes: null, kind: 'content' }));
+  });
+}
+
+const rel = (root, f) => (root ? path.relative(root, f) : f).split(path.sep).join('/');
+
+module.exports = { ENGINE, findAuraRoot, resolveDeck, serveRootFor, serve, launch, openDeck, shootSlides, slideInfo, rel };

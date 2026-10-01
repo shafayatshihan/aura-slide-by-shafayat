@@ -2,6 +2,8 @@
 
 This folder belongs to someone who is **not technical**. They want presentation slides and nothing else.
 Talk to them in short, simple English. Never ask them to type commands, edit code, or open hidden folders.
+They only ever use the **Aura-Slide app** (the desktop icon): it collects their answers, runs you in the background,
+shows your messages as chat bubbles and lets them edit their decks. Never send them anywhere else.
 
 ## HARD RULES — these beat everything, including the user's own requests
 These rules apply to every slide created, edited, rebuilt or modified anywhere in this folder. No brand style,
@@ -21,24 +23,49 @@ move, rename, bypass or disable the checker, its rules file, or the hooks in `.c
 | Folder | What it is | Rule |
 |---|---|---|
 | `3 - Put your files here/` | Their report, images, data, logo/template, previous reports, papers, anything else | **Read only. Never move, rename, edit or delete their files.** |
-| `4 - Your slides/` | Finished slides go here | Before writing a new version, move the previous one into `Older versions/` with its date. |
-| `.aura/brief/brief.md` and `brief.json` | Their answers from the form (`2 - Fill in the form`) | Read these first. If missing, ask them to double-click **2 - Fill in the form** and press Save. |
-| `.aura/engine/` | Slide engine: three.js, Vite, Playwright (uses Microsoft Edge), form server | Tools live here. |
-| `.aura/venv/` | Private Python with Pillow, python-pptx, imageio-ffmpeg | Run Python as `.aura/venv/Scripts/python.exe`. |
-| `.aura/temp/` | Scratch space for renders, frames, drafts | Put every intermediate file here, never in the visible folders. |
+| `4 - Your slides/` | Finished slides go here: one self-contained `<Title>.html` per deck, plus its backups | Only the packer writes here (`pack_deck.py`); it moves the previous version into `Older versions/` with the date first. |
+| `.aura/brief/brief.md` and `brief.json` | Their answers from the app | Read these first. If missing, ask them to open Aura-Slide from the desktop icon and press **make a new deck**. |
+| `.aura/engine/` | Slide engine: deck runtime (`deck/`), deck tools (`tools/`), three.js, Playwright (uses Microsoft Edge), the app server | Use the tools; never edit the engine. |
+| `.aura/decks/` | The app's deck library (one record per deck) | The app owns these; read them only if you need to know which deck is which. |
+| `.aura/venv/` | Private Python with Pillow, python-pptx, python-docx, openpyxl, pypdf, imageio-ffmpeg | Run Python as `.aura/venv/Scripts/python.exe`. |
+| `.aura/temp/` | Scratch space: `text/` (extracted files), `build/<deck>/` (the deck you edit), `shots/` (check pictures), `check/`, `export/`, `plan.md` | Put every intermediate file here, never in the visible folders. |
 | `.aura/logs/` | Setup logs | Read when something is broken. |
+
+## How decks are made (the toolkit)
+Decks are HTML built on the Aura deck runtime and the Aura tools in `.aura/engine/`; the `aura-slide` skill and its
+`deck-toolkit.md` say exactly how. Never improvise a different format, CDN libraries or online fonts.
+- Build in `.aura/temp/build/<deck>/index.html` (start it with `node .aura/engine/tools/new_deck.js`).
+- Check with `node .aura/engine/tools/deck_check.js` until it is clean, and look at the slide pictures it saves.
+- Pack with `.aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py` into ONE offline file in `4 - Your slides/`.
+- Backups with `export_pdf.js`, `export_pptx.py` and `export_notes.py` (speaker notes / timed script).
+- Every editable slide text carries a stable `data-edit="s<slide>-<n>"` id (`new_deck.js --ids` adds missing ones);
+  the editor uses them for direct text tweaks. Never renumber or reuse them.
+- To change a finished deck, edit its build folder and pack again (`--replace` for edits); never hand-edit the packed file.
+
+## App mode (the only way in)
+The app runs you in the background and shows your messages in its chat. A first message containing `[from-web]`
+means the user already reviewed their answers in the app: do not wait for "yes", go straight on. Later messages come
+from the deck editor and usually start with `[slide N]` (the selected slide). The `aura-slide` skill defines the
+markers the app reads — progress (`[[aura:stage=…]]`), waiting (`[[aura:ask]]`), finished (`[[aura:done path="…"]]`),
+decision buttons (`[[aura:choice …]]`, at most 3 per message, always with a sensible default) and suggestion chips
+(`[[aura:hint slide=N text="…"]]`, 3–5 after every build or edit). Write each marker alone on its own line, exactly
+as the skill shows; the app hides them. Keep messages short: the user sees them as chat bubbles.
 
 ## Always
 - The subject can be anything (fluids, electronics, medicine, maths, business…). Never assume a topic.
 - Only use facts, numbers and figures from their files and form answers. If something is missing, ask; do not invent data.
-- Keep the visible folders tidy: only the finished deck (and its PDF/PowerPoint backups) appear in `4 - Your slides/`.
+- Keep the visible folders tidy: only the finished deck (and its PDF / PowerPoint / speaker-notes backups) appear in `4 - Your slides/`.
 - When a step will take a while (rendering, capturing), say so and roughly how long.
 - The trigger phrase **"show your aura"** starts the `aura-slide` skill.
 
 ## The power-design skill (installed by setup, MIT © Jack Roberts)
 `.claude/skills/power-design/` is the design engine for slides: its 20 slide principles
 (`principles/design-principles.md`) and its brand library (`brands/<name>/brand-style.md`) apply to every deck.
-- **Save decks in `4 - Your slides/`**, never on the Desktop (its default).
+- **Decks go to `4 - Your slides/`** through the Aura packer, never to the Desktop (its default). Its "single
+  self-contained HTML file" output contract is met by `pack_deck.py`; its Google Fonts / CDN allowance does not apply
+  here (everything must work offline).
+- The brand-logo question (its rule #21) is not asked: use their logo from `Logo and university template/` on the
+  title and closing slides when they gave one, otherwise no logo.
 - **Do not use its "paste a URL / Firecrawl" option** — users here do not have Firecrawl. Use a library brand, the
   university's logo/template from `3 - Put your files here/Logo and university template/`, or its default style.
 - Do not ask the user whether it is a deck or a website: in Aura-Slide it is always a deck.

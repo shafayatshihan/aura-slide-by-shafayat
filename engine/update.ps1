@@ -1,7 +1,11 @@
-# Downloads the newest Aura-Slide release and runs its setup. Your files, your slides and your form answers stay.
+# Gets the newest Aura-Slide. Your files, your slides and your form answers stay.
+# With the Aura-Slide app installed (.aura\AuraSlide.exe) the app does it (download, setup, reopen); otherwise the
+# newest release is downloaded here and its setup runs in this console window.
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Aura = Split-Path -Parent $PSScriptRoot
+$app  = Join-Path $Aura 'AuraSlide.exe'
+if (Test-Path $app) { Start-Process -FilePath $app -ArgumentList '--update'; exit 0 }
 $cfg  = Get-Content (Join-Path $Aura 'aura.config.json') -Raw | ConvertFrom-Json
 $work = Join-Path $Aura 'temp\update'
 Write-Host ''; Write-Host '  Getting the newest Aura-Slide...' -ForegroundColor Cyan
@@ -13,6 +17,7 @@ try {
   Expand-Archive $zip -DestinationPath $work -Force
   $setup = Get-ChildItem $work -Recurse -Filter 'setup.ps1' | Select-Object -First 1
   if (-not $setup) { throw 'The download did not contain the setup.' }
+  $env:AURA_ROOT = Split-Path -Parent $Aura                # update this install, wherever it is
   & $setup.FullName
 } catch {
   Write-Host ("  Update failed: " + $_.Exception.Message) -ForegroundColor Red

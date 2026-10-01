@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gaze + cursor harness</title>
+<link rel="icon" href="/icon.png">
+<link rel="stylesheet" href="/css/cursor.css">
+<style>
+@font-face{font-family:'DM Sans';src:url('/fonts/DMSans-Regular.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:Epilogue;src:url('/fonts/Epilogue-Black.woff2') format('woff2');font-weight:900;font-style:normal;font-display:swap}
+:root{--ink:#080909;--pill:#f7f8fa;--bg:#EEEDF9;--lilac:#c9c3ef;--fur4:#b09fc7;--fur5:#9281b0;--pink:#d89cb3;--orange:#f2a65a;
+  --ease:cubic-bezier(.22,1,.36,1);--ease-io:cubic-bezier(.65,0,.35,1)}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg)}
+body{font:400 15px/1.4 'DM Sans',system-ui,sans-serif;color:var(--ink);font-synthesis:none;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+button{border:0;background:none;padding:0;cursor:pointer}
+
+/* the same 1600x900 stage and character box as the app */
+#stage{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0;overflow:hidden;background:var(--bg)}
+#char{position:absolute;left:0;top:0;width:1600px;height:900px;pointer-events:none;
+  transition:left .7s var(--ease-io),top .7s var(--ease-io),width .7s var(--ease-io),height .7s var(--ease-io)}
+#stage[data-mode=stage] #char{left:300px;top:337px;width:1000px;height:563px}
+#charVideo{display:block;width:100%;height:100%;object-fit:cover;background:var(--bg)}
+#outline{position:absolute;inset:0;border:1.5px dashed rgba(146,129,176,.55);border-radius:6px;opacity:0;transition:opacity .3s}
+body.debug #outline{opacity:1}
+
+/* debug marks in viewport pixels */
+.mark{position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:5}
+.mark::before{content:'';position:absolute;left:-7px;top:-7px;width:14px;height:14px;border-radius:50%;
+  border:2px solid var(--orange)}
+#target::before{border-color:var(--pink);background:rgba(216,156,179,.35)}
+body:not(.debug) .mark{display:none}
+
+/* control panel */
+#panel{position:fixed;left:16px;top:16px;width:300px;padding:16px;border-radius:22px;background:var(--pill);z-index:10;
+  display:flex;flex-direction:column;gap:10px}
+#panel h1{margin:0;font:900 22px/1.05 Epilogue,'DM Sans',sans-serif;letter-spacing:-.01em}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:100px;background:#fff;
+  transition:background .2s,color .2s,transform .2s var(--ease)}
+.pill:hover{background:var(--lilac)}
+.pill:active{transform:scale(.96)}
+.pill.ink{background:var(--ink);color:var(--pill)}
+.pill[aria-pressed=true]{background:var(--ink);color:var(--pill)}
+.pill:disabled{opacity:.45}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}
+dt{color:rgba(8,9,9,.55)}
+dd{margin:0;font-variant-numeric:tabular-nums}
+input[type=text]{height:38px;padding:0 14px;border-radius:12px;border:0;background:#fff;outline:none}
+input[type=text]:focus{box-shadow:0 0 0 2px var(--lilac)}
+.choice{display:flex;align-items:center;justify-content:center;height:44px;border-radius:14px;background:#fff;flex:1}
+.choice.on{background:var(--ink);color:var(--pill)}
+#drop{display:flex;align-items:center;justify-content:center;height:58px;border-radius:16px;border:1.5px dashed var(--fur4);
+  color:rgba(8,9,9,.6);font-size:13px;text-align:center}
+#drop.over{background:rgba(201,195,239,.4)}
+.note{margin:0;font-size:13px;color:rgba(8,9,9,.55)}
+</style>
+</head>
+<body class="debug">
+<div id="stage" data-mode="full">
+  <div id="char" aria-hidden="true">
+    <video id="charVideo" muted playsinline preload="auto" src="/assets/character.mp4"></video>
+    <div id="outline"></div>
+  </div>
+</div>
+<i id="eye" class="mark"></i>
+<i id="target" class="mark"></i>
+
+<aside id="panel">
+  <h1>gaze + cursor</h1>
+  <div class="row">
+    <button id="mode" class="pill ink" type="button" data-cursor-label="switch">to stage mode</button>
+    <button id="debug" class="pill" type="button" aria-pressed="true" data-cursor-label="marks">marks</button>
+  </div>
+  <div class="row">
+    <button id="look" class="pill" type="button" data-cursor-label="look here">look at me</button>
+    <button id="release" class="pill" type="button">release</button>
+    <button id="pause" class="pill" type="button" aria-pressed="false">pause</button>
+  </div>
+  <dl>
+    <dt>mode</dt><dd id="o-mode">full</dd>
+    <dt>time</dt><dd id="o-time">0</dd>
+    <dt>angle</dt><dd id="o-angle">–</dd>
+    <dt>seeks</dt><dd id="o-seeks">0</dd>
+    <dt>video</dt><dd id="o-ready">–</dd>
+  </dl>
+  <input id="text" type="text" placeholder="type here (native I-beam)" aria-label="test text">
+  <div class="row">
+    <button class="choice" type="button" data-cursor-label="pick">one</button>
+    <button class="choice" type="button" data-cursor-label="pick">two</button>
+    <label class="choice"><input type="checkbox" hidden> label</label>
+  </div>
+  <div class="row">
+    <span class="pill" data-cursor>data-cursor</span>
+    <button class="pill" type="button" disabled>disabled</button>
+  </div>
+  <div id="drop" data-cursor-drop="drop to add">drag a file over the window</div>
+  <p class="note">The orange ring marks the computed eye midpoint, the pink dot the gaze target.</p>
+</aside>
+
+<script type="module">
+import { emit } from '/js/bus.js';
+import { initGaze } from '/js/gaze.js';
+import { initCursor } from '/js/cursor.js';
+
+const $ = s => document.querySelector(s);
+const stage = $('#stage'), video = $('#charVideo');
+
+function fit() {
+  const s = Math.min(innerWidth / 1600, innerHeight / 900);
+  stage.style.transform = `translate(${(innerWidth - 1600 * s) / 2}px,${(innerHeight - 900 * s) / 2}px) scale(${s})`;
+}
+fit();
+addEventListener('resize', fit);
+
+const gaze = initGaze(video, { framesUrl: '/assets/gaze-frames.json' });
+const cursor = initCursor();
+
+// An independent copy of the eye formula, only for the debug mark and the tests.
+function eye() {
+  const r = video.getBoundingClientRect();
+  const s = Math.max(r.width / 1920, r.height / 1080);
+  return { x: r.left + (r.width - 1920 * s) / 2 + 948 * s, y: r.top + (r.height - 1080 * s) / 2 + 418 * s };
+}
+
+let seeks = 0, target = null;
+video.addEventListener('seeking', () => { seeks++; });
+addEventListener('pointermove', e => { target = { x: e.clientX, y: e.clientY }; }, { passive: true });
+
+function setMode(mode) {
+  stage.dataset.mode = mode;
+  $('#mode').textContent = mode === 'full' ? 'to stage mode' : 'to full mode';
+  emit('char:mode', { mode });
+}
+$('#mode').addEventListener('click', () => setMode(stage.dataset.mode === 'full' ? 'stage' : 'full'));
+$('#debug').addEventListener('click', e => {
+  const on = document.body.classList.toggle('debug');
+  e.currentTarget.setAttribute('aria-pressed', on);
+});
+$('#look').addEventListener('click', e => {
+  const r = e.currentTarget.getBoundingClientRect();
+  target = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  gaze.lookAt(target.x, target.y);
+});
+$('#release').addEventListener('click', () => gaze.release());
+$('#pause').addEventListener('click', e => {
+  const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+  e.currentTarget.setAttribute('aria-pressed', on);
+  e.currentTarget.textContent = on ? 'paused' : 'pause';
+  gaze.setPaused(on);
+});
+$('#text').addEventListener('focus', e => {
+  const r = e.currentTarget.getBoundingClientRect();
+  gaze.lookAt(r.left + 20, r.top + r.height / 2);
+});
+for (const c of document.querySelectorAll('button.choice')) c.addEventListener('click', () => c.classList.toggle('on'));
+const drop = $('#drop');
+addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+addEventListener('dragleave', e => { if (!e.relatedTarget) drop.classList.remove('over'); });
+addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  drop.textContent = `${e.dataTransfer.files.length} file(s) dropped`;
+});
+
+// live readouts
+const out = id => $('#o-' + id);
+(function tick() {
+  const p = eye();
+  $('#eye').style.transform = `translate(${p.x}px,${p.y}px)`;
+  if (target) {
+    $('#target').style.transform = `translate(${target.x}px,${target.y}px)`;
+    let a = Math.atan2(target.y - p.y, target.x - p.x);
+    if (a < 0) a += Math.PI * 2;
+    out('angle').textContent = `${a.toFixed(3)} rad`;
+  }
+  out('mode').textContent = stage.dataset.mode;
+  out('time').textContent = video.currentTime.toFixed(5) + ' s';
+  out('seeks').textContent = seeks;
+  out('ready').textContent = `ready ${video.readyState}${video.seeking ? ', seeking' : ''}${video.paused ? ', paused' : ', playing'}`;
+  requestAnimationFrame(tick);
+})();
+
+window.harness = { gaze, cursor, video, eye, setMode, seeks: () => seeks };
+</script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<!-- Aura deck. Build it in .aura/temp/build/<deck>/index.html, check it with deck_check.js, then pack it with pack_deck.py.
+     Rules: every slide is 1920 x 1080; keep text and logos 96 px from every edge (.safe does that);
+     no text under 26 px (type scale 28 / 36 / 48 / 64 / 84 / 112); speaker notes go in <aside class="notes" data-aura-notes>.
+     Slide attributes: data-kind="title|section|content|quote|closing" (word budget), data-minutes="1.5" (timed script).
+     Motion: data-anim="fade|fade-up|fade-down|slide-left|slide-right|zoom|pop|rise|grow-x|draw" + data-delay="200" (ms)
+     replays every time the slide is entered. 3D: <div class="aura-3d" data-scene="id"> + Aura.scene('id', setup).
+     Editable text: every title, kicker, body line, label and caption carries a stable data-edit id such as s3-2 (never
+     renumber, never reuse); after writing slides run  node .aura/engine/tools/new_deck.js --ids <this folder>  to add
+     the missing ones. -->
+<link rel="stylesheet" href="{{ENGINE}}/deck/runtime.css">
+<link rel="stylesheet" href="{{ENGINE}}/deck/themes/{{THEME}}.css">
+<script type="importmap">{"imports":{"three":"{{ENGINE}}/node_modules/three/build/three.module.js"}}</script>
+<script src="{{ENGINE}}/deck/runtime.js"></script>
+<style>
+  /* deck-specific layout goes here; the theme file already sets fonts, colours and the signature device */
+  .cover .safe { display: flex; flex-direction: column; justify-content: center; gap: 32px; }
+</style>
+</head>
+<body>
+<main class="deck" data-mode="presenter">
+
+  <section class="slide cover" data-kind="title" data-minutes="0.5">
+    <div class="safe">
+      <span class="kicker" data-edit="s1-1" data-anim="fade-up">{{KICKER}}</span>
+      <h1 class="title" data-edit="s1-2" data-anim="fade-up" data-delay="120">{{TITLE}}</h1>
+    </div>
+    <aside class="notes" data-aura-notes><p>Greet the room and say the title in your own words.</p></aside>
+  </section>
+
+</main>
+<script>
+  /* 3D example (only when style.threeD is "yes"):
+  Aura.scene('orb', ({ THREE, width, height, still }) => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 100); camera.position.set(0, 0, 6);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xd7c2dd, 2.2));
+    const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 4), new THREE.MeshStandardMaterial({ color: 0xff90e8, roughness: .5 }));
+    scene.add(mesh);
+    return { scene, camera, update(t) { mesh.rotation.y = t * 0.6; } };
+  });
+  */
+</script>
+</body>
+</html>

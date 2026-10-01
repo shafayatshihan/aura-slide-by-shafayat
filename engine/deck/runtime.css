@@ -1,0 +1,152 @@
+/* Aura-Slide deck runtime: layout, navigation chrome, slide-enter animations, all-slides (print/check) mode.
+   Slides are authored at 1920 x 1080 and scaled to fit the window. Theme files set the tokens below. */
+:root {
+  --aura-letterbox: #0b0b0c;
+  --aura-ui-ink: #ffffff;
+  --aura-ui-bg: rgba(16, 16, 18, .78);
+  --aura-progress: var(--accent, #c9c3ef);
+  --aura-ease: cubic-bezier(.22, .8, .24, 1);
+  --aura-dur: 700ms;
+  --aura-scale: 1;
+  --aura-x: 0px;
+  --aura-y: 0px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--aura-letterbox);
+  overflow: hidden;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- the deck and its slides ---------- */
+.deck { position: fixed; inset: 0; overflow: hidden; }
+.slide {
+  position: absolute; left: 0; top: 0;
+  width: 1920px; height: 1080px;
+  overflow: hidden;
+  background: var(--bg, #fff);
+  color: var(--ink, #111);
+  transform-origin: 0 0;
+  transform: translate(var(--aura-x), var(--aura-y)) scale(var(--aura-scale));
+  opacity: 0; visibility: hidden;
+  transition: opacity 280ms ease, visibility 0s linear 280ms;
+  contain: layout paint;
+}
+.slide.is-current { opacity: 1; visibility: visible; transition: opacity 280ms ease, visibility 0s; z-index: 1; }
+.slide [data-aura-notes], .slide .notes { display: none !important; }
+/* the 5% safe zone (96 px) as a ready-made container */
+.slide > .safe { position: absolute; inset: 96px; }
+
+/* loops and 2D animations only run on the current slide */
+.slide:not(.is-current) *, .slide:not(.is-current) *::before, .slide:not(.is-current) *::after { animation-play-state: paused !important; }
+
+/* ---------- slide-enter animations (data-anim) ---------- */
+.slide [data-anim] { --d: 0ms; }
+.slide.is-entering [data-anim] {
+  animation-duration: var(--aura-dur);
+  animation-timing-function: var(--aura-ease);
+  animation-delay: var(--d);
+  animation-fill-mode: both;
+}
+.slide.is-entering [data-anim="fade"]       { animation-name: aura-fade; }
+.slide.is-entering [data-anim="fade-up"]    { animation-name: aura-fade-up; }
+.slide.is-entering [data-anim="fade-down"]  { animation-name: aura-fade-down; }
+.slide.is-entering [data-anim="slide-left"] { animation-name: aura-slide-left; }
+.slide.is-entering [data-anim="slide-right"]{ animation-name: aura-slide-right; }
+.slide.is-entering [data-anim="zoom"]       { animation-name: aura-zoom; }
+.slide.is-entering [data-anim="pop"]        { animation-name: aura-pop; animation-timing-function: cubic-bezier(.34, 1.56, .64, 1); }
+.slide.is-entering [data-anim="rise"]       { animation-name: aura-rise; transform-origin: 50% 100%; }
+.slide.is-entering [data-anim="grow-x"]     { animation-name: aura-grow-x; transform-origin: 0 50%; }
+.slide.is-entering [data-anim="draw"]       { animation-name: aura-draw; animation-duration: calc(var(--aura-dur) * 2); }
+/* "draw" works on SVG shapes with pathLength="1" */
+.slide [data-anim="draw"] { stroke-dasharray: 1; stroke-dashoffset: 0; }
+
+@keyframes aura-fade       { from { opacity: 0; } }
+@keyframes aura-fade-up    { from { opacity: 0; transform: translateY(48px); } }
+@keyframes aura-fade-down  { from { opacity: 0; transform: translateY(-48px); } }
+@keyframes aura-slide-left { from { opacity: 0; transform: translateX(96px); } }
+@keyframes aura-slide-right{ from { opacity: 0; transform: translateX(-96px); } }
+@keyframes aura-zoom       { from { opacity: 0; transform: scale(.88); } }
+@keyframes aura-pop        { 0% { opacity: 0; transform: scale(.6); } 100% { opacity: 1; transform: none; } }
+@keyframes aura-rise       { from { transform: scaleY(0); } }
+@keyframes aura-grow-x     { from { transform: scaleX(0); } }
+@keyframes aura-draw       { from { stroke-dashoffset: 1; } }
+
+/* 3D and canvas holders */
+.aura-3d, .aura-canvas { position: absolute; }
+.aura-3d > canvas, .aura-canvas > canvas, .aura-3d > img { display: block; width: 100%; height: 100%; }
+.aura-3d[data-fallback]::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--surface, #eee), transparent 70%);
+}
+
+/* ---------- runtime chrome (never part of a slide; text never below 26 px) ---------- */
+.aura-ui { position: fixed; z-index: 50; font: 400 26px/1.2 system-ui, "Segoe UI", sans-serif; color: var(--aura-ui-ink); }
+.aura-progress { left: 0; right: 0; bottom: 0; height: 6px; pointer-events: none; }
+.aura-progress > i { display: block; height: 100%; width: 0; background: var(--aura-progress); transition: width 380ms var(--aura-ease); opacity: .9; }
+.aura-bar {
+  right: 24px; bottom: 22px; display: flex; gap: 8px; align-items: center;
+  padding: 6px; border-radius: 999px; background: var(--aura-ui-bg);
+  opacity: 0; transform: translateY(8px); transition: opacity 240ms ease, transform 240ms ease; pointer-events: none;
+}
+.aura-show-ui .aura-bar, .aura-bar:focus-within { opacity: 1; transform: none; pointer-events: auto; }
+.aura-bar button {
+  all: unset; cursor: pointer; min-width: 56px; height: 52px; padding: 0 14px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center; font: inherit; color: inherit;
+}
+.aura-bar button:hover, .aura-bar button:focus-visible { background: rgba(255, 255, 255, .16); }
+.aura-bar button:focus-visible { outline: 3px solid var(--aura-progress); outline-offset: 2px; }
+.aura-bar svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.aura-count { padding: 0 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.aura-hide-cursor, .aura-hide-cursor * { cursor: none !important; }
+
+/* ---------- presenter view (N in this window, P in a second window) ---------- */
+.aura-notes-panel { display: none; font-size: 26px; }
+.aura-presenter body { background: #141416; }
+.aura-presenter .aura-notes-panel {
+  display: grid; position: fixed; z-index: 40; right: 0; top: 0; bottom: 0; width: 34vw; min-width: 360px;
+  grid-template-rows: auto auto 1fr; gap: 20px; padding: 28px; background: #1d1d20; color: #f4f4f6;
+  font: 400 26px/1.45 system-ui, "Segoe UI", sans-serif; overflow: hidden;
+}
+.aura-notes-panel .aura-np-head { display: flex; justify-content: space-between; gap: 16px; font-variant-numeric: tabular-nums; }
+.aura-notes-panel .aura-np-time { font-size: 40px; font-weight: 600; }
+.aura-notes-panel .aura-np-plan { opacity: .7; }
+.aura-notes-panel .aura-np-next { opacity: .75; border-top: 1px solid rgba(255,255,255,.14); padding-top: 14px; }
+.aura-notes-panel .aura-np-notes { overflow-y: auto; white-space: pre-wrap; font-size: 30px; padding-right: 8px; }
+.aura-notes-panel .aura-np-notes:empty::before { content: "No speaker notes for this slide."; opacity: .55; }
+.aura-presenter .aura-progress { right: 34vw; }
+
+/* ---------- all-slides mode: print, PDF export and checking ---------- */
+.aura-all body { overflow: visible; height: auto; background: #777; }
+.aura-all .deck { position: static; overflow: visible; }
+.aura-all .slide {
+  position: relative; transform: none; opacity: 1; visibility: visible; transition: none;
+  margin: 0 0 24px; break-after: page; page-break-after: always;
+}
+.aura-all .slide:last-child { margin-bottom: 0; break-after: auto; page-break-after: auto; }
+.aura-all .aura-ui, .aura-all .aura-notes-panel { display: none !important; }
+.aura-all .slide *, .aura-all .slide *::before, .aura-all .slide *::after { animation-play-state: paused !important; }
+.aura-all .slide [data-anim] { animation: none !important; }
+
+@media print {
+  @page { size: 1920px 1080px; margin: 0; }
+  html, body { background: none !important; }
+  .slide { margin: 0 !important; }
+}
+
+/* ---------- reduced motion: everything appears in its final state ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .slide { transition: none; }
+  .slide [data-anim] { animation: none !important; }
+  .slide *, .slide *::before, .slide *::after { animation-play-state: paused !important; }
+}
+.aura-still .slide [data-anim] { animation: none !important; }
+.aura-still .slide *, .aura-still .slide *::before, .aura-still .slide *::after { animation-play-state: paused !important; }
+
+/* editor preview (?aura=edit): show which texts can be changed directly */
+.aura-edit .slide [data-edit] { cursor: text; border-radius: 6px; transition: outline-color .15s; outline: 3px dashed transparent; outline-offset: 6px; }
+.aura-edit .slide [data-edit]:hover { outline-color: rgba(120, 100, 220, .65); }
+.aura-edit .slide [data-edit][contenteditable] { outline: 3px solid rgba(120, 100, 220, .9); }

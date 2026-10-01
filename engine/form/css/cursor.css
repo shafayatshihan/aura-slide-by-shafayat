@@ -1,0 +1,78 @@
+/* Custom cursor (see js/cursor.js): an ink dot that tracks exactly and a soft lilac ring that follows on a spring.
+   The layer is pointer-events:none throughout, so it can never take a click. */
+
+/* Hide the system cursor only once the custom one is live (cursor.js adds the class after the first pointer move).
+   Text fields keep the native I-beam so the caret stays easy to place. */
+html.aura-cursor-on, html.aura-cursor-on *{cursor:none !important}
+html.aura-cursor-on :is(input:not([type]), input[type=text], input[type=email], input[type=search], input[type=url],
+  input[type=tel], input[type=password], input[type=number], textarea,
+  [contenteditable]:not([contenteditable=false]), [contenteditable]:not([contenteditable=false]) *){cursor:text !important}
+
+.aura-cursor{
+  --ring:36px; --dot:8px;
+  --ring-fill:rgba(201,195,239,.34); --ring-line:rgba(146,129,176,.55);
+  --ease-out:cubic-bezier(.22,1,.36,1); --ease-back:cubic-bezier(.34,1.56,.64,1);
+  position:fixed; inset:0; width:100%; height:100%; max-width:none; max-height:none;
+  margin:0; padding:0; border:0; background:transparent; color:inherit; overflow:visible;
+  z-index:2147483647; pointer-events:none; contain:layout style;
+}
+.aura-cursor *{pointer-events:none}
+.aura-cursor::backdrop{display:none}
+
+/* Both parts sit on a zero-size anchor moved by transform; their visuals are centred on that point. */
+.aura-cursor__ring, .aura-cursor__dot{position:absolute; left:0; top:0; width:0; height:0; will-change:transform;
+  transition:opacity .22s ease}
+.aura-cursor:not(.is-on) > *{opacity:0}
+
+.aura-cursor__dot i{position:absolute; left:calc(var(--dot) / -2); top:calc(var(--dot) / -2);
+  width:var(--dot); height:var(--dot); border-radius:50%; background:#080909;
+  transform:scale(var(--ds, 1)); transition:transform .25s var(--ease-out), opacity .18s ease}
+
+.aura-cursor__ring i{position:absolute; left:calc(var(--ring) / -2); top:calc(var(--ring) / -2);
+  width:var(--ring); height:var(--ring); border-radius:50%; box-sizing:border-box;
+  background:var(--ring-fill); border:1.5px solid var(--ring-line);
+  transform:scale(calc(var(--rs, 1) * var(--rp, 1)));
+  transition:transform .38s var(--ease-back), background-color .25s ease, border-color .25s ease, opacity .2s ease}
+
+/* over things you can click: a bigger, fuller ring; the dot tucks in */
+.aura-cursor[data-state=hover]{--rs:1.6; --ds:.75; --ring-fill:rgba(201,195,239,.55); --ring-line:rgba(146,129,176,0)}
+/* press: everything gives a little */
+.aura-cursor.is-press{--rp:.78}
+.aura-cursor.is-press .aura-cursor__dot i{transform:scale(calc(var(--ds, 1) * .7))}
+/* text fields: step aside for the native I-beam */
+.aura-cursor[data-state=text]{--rs:.4}
+.aura-cursor[data-state=text] .aura-cursor__ring i, .aura-cursor[data-state=text] .aura-cursor__dot i{opacity:0}
+/* files dragged over the window: a wide dashed catcher that slowly turns */
+.aura-cursor[data-state=drop]{--rs:2.1; --ds:1.25; --ring-fill:rgba(216,156,179,.16); --ring-line:#9281b0}
+.aura-cursor[data-state=drop] .aura-cursor__ring i{border-width:2px; border-style:dashed;
+  animation:aura-cursor-turn 6s linear infinite}
+/* busy: a ring with one darker arc going round */
+.aura-cursor[data-state=busy]{--rs:1.1; --ring-fill:rgba(201,195,239,.3)}
+.aura-cursor[data-state=busy] .aura-cursor__ring i{border:2px solid rgba(146,129,176,.28); border-top-color:#9281b0;
+  animation:aura-cursor-turn 1s linear infinite}
+.aura-cursor[data-state=hidden] > *{opacity:0}
+
+@keyframes aura-cursor-turn{
+  from{transform:scale(calc(var(--rs, 1) * var(--rp, 1))) rotate(0deg)}
+  to{transform:scale(calc(var(--rs, 1) * var(--rp, 1))) rotate(360deg)}
+}
+
+/* short pill label beside the ring, flipped near the right and bottom edges */
+.aura-cursor__label{position:absolute; left:26px; top:22px; padding:6px 11px 7px; border-radius:100px;
+  background:#080909; color:#f7f8fa; font:400 13px/1 'DM Sans', system-ui, 'Segoe UI', sans-serif;
+  letter-spacing:.01em; white-space:nowrap; font-synthesis:none;
+  opacity:0; transform:translateY(4px) scale(.92); transform-origin:0 0;
+  transition:opacity .18s ease, transform .3s var(--ease-out)}
+.aura-cursor.flip-x .aura-cursor__label{left:auto; right:26px; transform-origin:100% 0}
+.aura-cursor.flip-y .aura-cursor__label{top:auto; bottom:22px}
+.aura-cursor.has-label:is([data-state=hover], [data-state=drop], [data-state=busy]) .aura-cursor__label{
+  opacity:1; transform:none}
+.aura-cursor[data-state=drop] .aura-cursor__label{left:46px}
+.aura-cursor[data-state=drop].flip-x .aura-cursor__label{left:auto; right:46px}
+
+/* touch-first screens keep the system behaviour; reduced motion gets instant, still feedback */
+@media (hover:none), (pointer:coarse){ .aura-cursor{display:none !important} }
+@media (prefers-reduced-motion:reduce){
+  .aura-cursor *, .aura-cursor *::before, .aura-cursor *::after{transition:none !important; animation:none !important}
+}
+@media print{ .aura-cursor{display:none !important} }

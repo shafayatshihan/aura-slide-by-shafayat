@@ -8,6 +8,9 @@
 // Rule 1 - minimum text size: every piece of text (HTML and SVG <text>) is measured in a real browser (Microsoft Edge)
 // at the 1920x1080 design size, including the effect of CSS transforms and SVG viewBox scaling.
 // Speaker notes are not slide text and are skipped when marked with data-aura-notes, .notes or .pnotes.
+// Aura deck runtime chrome (slide counter, buttons) is marked data-aura-ui and skipped too; it never shows text below
+// the minimum anyway. Every file is opened with ?aura=all so an Aura deck shows ALL its slides, unscaled, in their
+// final state. Text that is not rendered (display:none) is still measured.
 //
 // usage (manual): node check_rules.js <file.html> [...]
 const fs = require('fs'), path = require('path');
@@ -47,10 +50,11 @@ catch (e) { try { pw = require('playwright-core'); } catch (e2) { console.error(
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   const report = [];
   for (const f of files) {
-    await page.goto('file:///' + f.replace(/\\/g, '/'), { waitUntil: 'load', timeout: 60000 });
+    await page.goto(require('url').pathToFileURL(f).href + '?aura=all', { waitUntil: 'load', timeout: 60000 });
+    await page.waitForFunction(() => !window.Aura || document.documentElement.dataset.auraReady === '1', null, { timeout: 20000 }).catch(() => {});
     await page.evaluate(() => document.fonts && document.fonts.ready);
     const bad = await page.evaluate((MIN) => {
-      const skip = el => el.closest('[data-aura-notes], .notes, .pnotes, script, style, template, noscript, head');
+      const skip = el => el.closest('[data-aura-notes], .notes, .pnotes, [data-aura-ui], script, style, template, noscript, head');
       const seen = new Set(), out = [];
       const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let n; (n = w.nextNode());) {

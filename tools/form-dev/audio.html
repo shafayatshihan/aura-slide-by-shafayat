@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aura audio harness</title>
+<link rel="icon" href="data:,">
+<style>
+  @font-face{font-family:'DM Sans';src:url('/fonts/DMSans-Regular.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+  @font-face{font-family:Epilogue;src:url('/fonts/Epilogue-Black.woff2') format('woff2');font-weight:900;font-style:normal;font-display:swap}
+  :root{--ink:#080909;--pill:#f7f8fa;--bg:#EEEDF9;--lilac:#c9c3ef}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 'DM Sans',system-ui,sans-serif;font-synthesis:none}
+  main{max-width:980px;margin:0 auto;padding:40px 24px 60px}
+  h1{font:900 40px/1.05 Epilogue,sans-serif;margin:0 0 6px;letter-spacing:-.01em}
+  h2{font:900 20px/1.2 Epilogue,sans-serif;margin:32px 0 12px}
+  p{margin:0 0 16px;max-width:60ch}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  button{font:inherit;color:var(--ink);background:var(--pill);border:0;border-radius:100px;padding:9px 16px;cursor:pointer;transition:transform .15s ease,background .15s ease}
+  button:hover{background:#fff}
+  button:active{transform:scale(.96)}
+  button.on{background:var(--ink);color:var(--pill)}
+  .badge{display:inline-flex;align-items:center;height:30px;padding:6px 12px;border-radius:100px;background:var(--pill);font-size:14px}
+  input[type=range]{width:220px;accent-color:var(--ink)}
+  pre{background:var(--pill);border-radius:18px;padding:16px 18px;margin:0;font:13px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;min-height:60px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+  a{color:var(--ink)}
+</style>
+</head>
+<body>
+<main>
+  <span class="badge">dev harness</span>
+  <h1>aura audio</h1>
+  <p>Click “start” first (browsers only allow sound after a click). Music and sounds are generated live in Web Audio.</p>
+
+  <div class="row">
+    <button id="start">start</button>
+    <button id="music">music</button>
+    <button id="sfx">sfx</button>
+    <label class="row">volume <input id="vol" type="range" min="0" max="1" step="0.01"></label>
+  </div>
+
+  <h2>sounds</h2>
+  <div class="grid" id="sounds"></div>
+
+  <h2>state</h2>
+  <pre id="state">not started</pre>
+
+  <h2>offline render</h2>
+  <div class="row"><button id="render">render 64 s</button><span id="dl"></span></div>
+  <pre id="stats" style="margin-top:12px">-</pre>
+</main>
+<script type="module">
+import { audio, renderOffline } from '/js/audio.js';
+import { on } from '/js/bus.js';
+
+const $ = s => document.querySelector(s);
+const events = [];
+on('audio:change', d => events.push(d));
+
+for (const n of audio.names) {
+  const b = document.createElement('button');
+  b.textContent = n; b.dataset.sfx = n;
+  b.addEventListener('click', () => { audio.start(); audio.sfx(n); });
+  $('#sounds').append(b);
+}
+$('#start').onclick = () => audio.start();
+$('#music').onclick = () => { audio.start(); audio.setMusic(!audio.state().music); };
+$('#sfx').onclick = () => audio.setSfx(!audio.state().sfx);
+$('#vol').oninput = e => audio.setVolume(+e.target.value);
+
+function paint() {
+  const s = audio.state();
+  $('#music').classList.toggle('on', s.music); $('#music').textContent = s.music ? 'music on' : 'music off';
+  $('#sfx').classList.toggle('on', s.sfx); $('#sfx').textContent = s.sfx ? 'sfx on' : 'sfx off';
+  if (document.activeElement !== $('#vol')) $('#vol').value = s.volume;
+  $('#state').textContent = JSON.stringify(s, null, 1);
+}
+setInterval(paint, 250); paint();
+
+// ---- analysis helpers (used by the button and by automated tests)
+const db = x => x > 0 ? 20 * Math.log10(x) : -Infinity;
+function analyze(buffer, log, samples) {
+  const sr = buffer.sampleRate, chans = [0, 1].map(c => buffer.getChannelData(c)), N = chans[0].length;
+  let peak = 0, sum = 0, knee = 0;
+  const dc = chans.map(d => { let s = 0; for (let i = 0; i < N; i++) s += d[i]; return s / N; });
+  const win = Math.floor(sr * 4), windows = [];
+  for (let w = 0; w + win <= N; w += win) {
+    let s = 0;
+    for (const d of chans) for (let i = w; i < w + win; i++) { const v = d[i]; s += v * v; const a = Math.abs(v); if (a > peak) peak = a; if (a > 0.6) knee++; }
+    sum += s; windows.push(+db(Math.sqrt(s / (2 * win))).toFixed(1));
+  }
+  const pend = samples.map(s => s.pending), late = samples.filter(s => s.t >= 20);
+  const rate = late.length > 1 ? (late.at(-1).nodes - late[0].nodes) / (late.at(-1).t - late[0].t) : 0;
+  return {
+    seconds: +(N / sr).toFixed(2), peakDb: +db(peak).toFixed(2), rmsDb: +db(Math.sqrt(sum / (2 * windows.length * win))).toFixed(2),
+    rms4s: windows, dc: dc.map(v => +v.toExponential(2)), clipKneeFraction: knee / (2 * N),
+    maxPendingVoices: Math.max(...pend), pendingFirstHalfMax: Math.max(...pend.slice(0, pend.length >> 1)), pendingSecondHalfMax: Math.max(...pend.slice(pend.length >> 1)),
+    voicesCreated: samples.at(-1)?.created, nodesCreated: samples.at(-1)?.nodes, nodesPerSecond: +rate.toFixed(1),
+    sections: log,
+  };
+}
+function wav(buffer) {
+  const sr = buffer.sampleRate, n = buffer.length, ch = 2, out = new DataView(new ArrayBuffer(44 + n * ch * 2));
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); out.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+  out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, ch, true); out.setUint32(24, sr, true);
+  out.setUint32(28, sr * ch * 2, true); out.setUint16(32, ch * 2, true); out.setUint16(34, 16, true); str(36, 'data'); out.setUint32(40, n * ch * 2, true);
+  const L = buffer.getChannelData(0), R = buffer.getChannelData(1);
+  for (let i = 0, o = 44; i < n; i++) for (const d of [L, R]) { const v = Math.max(-1, Math.min(1, d[i])); out.setInt16(o, v < 0 ? v * 32768 : v * 32767, true); o += 2; }
+  return new Blob([out], { type: 'audio/wav' });
+}
+async function renderTest(opts = {}) {
+  const r = await renderOffline({ seconds: 64, ...opts });
+  return { stats: analyze(r.buffer, r.log, r.samples), blob: wav(r.buffer), bpm: r.bpm };
+}
+window.__aura = { audio, renderOffline, analyze, wav, renderTest, events };
+
+$('#render').onclick = async () => {
+  $('#stats').textContent = 'rendering…';
+  const { stats, blob, bpm } = await renderTest();
+  $('#stats').textContent = JSON.stringify({ bpm, ...stats }, null, 1);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'lofi.wav'; a.textContent = 'download wav';
+  $('#dl').replaceChildren(a);
+};
+</script>
+</body>
+</html>
