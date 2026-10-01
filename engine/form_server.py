@@ -1297,10 +1297,10 @@ def fix_update():
     # detached and outside the job object, so it keeps going when it restarts this server
     flags = getattr(subprocess, 'DETACHED_PROCESS', 0) | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
     try:
-        subprocess.Popen([str(exe), '--update'], cwd=str(AURA), close_fds=True,
+        subprocess.Popen([str(exe), '--update', '--from-app'], cwd=str(AURA), close_fds=True,
                          creationflags=flags | getattr(subprocess, 'CREATE_BREAKAWAY_FROM_JOB', 0))
     except OSError:                  # this server runs in a job that forbids breakaway
-        subprocess.Popen([str(exe), '--update'], cwd=str(AURA), close_fds=True, creationflags=flags)
+        subprocess.Popen([str(exe), '--update', '--from-app'], cwd=str(AURA), close_fds=True, creationflags=flags)
     return 200, {'ok': True, 'launched': True}
 
 

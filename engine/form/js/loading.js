@@ -180,9 +180,19 @@ export function mountLoading(el, { audio, onDone } = {}) {
       return;
     }
     if (name === 'update' || name === 'claude') {
-      say(res.launched === false ? 'the updater would open now (test mode).' : 'the updater is open. aura-slide restarts by itself when it’s done.');
-      r.li.dataset.state = 'warn';
-      r.fixing = false;
+      if (res.launched === false) { say('the updater would open now (test mode).'); r.li.dataset.state = 'warn'; r.fixing = false; return; }
+      say('updating aura-slide… this window refreshes by itself when it’s done.');
+      r.li.dataset.state = 'fixing';
+      // the updater stops this server, installs, then starts it again: wait for that, then reload in place
+      let wentDown = false;
+      const t0 = Date.now();
+      while (alive && Date.now() - t0 < 15 * 60 * 1000) {
+        await sleep(2000);
+        const up = await fetch('/api/ping', { cache: 'no-store' }).then(x => x.ok).catch(() => false);
+        if (!up) wentDown = true;
+        else if (wentDown) { sfx('success'); location.reload(); return; }
+      }
+      r.fixing = false; say('the update is taking a while. if it finished, click check again.'); r.li.dataset.state = 'warn';
       return;
     }
     if (name === 'signin') {

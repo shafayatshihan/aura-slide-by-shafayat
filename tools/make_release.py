@@ -8,7 +8,8 @@ import json, pathlib, zipfile
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 OUT = REPO / 'release' / 'Aura-Slide-Setup.zip'
-SKIP_DIRS = {'tools', 'docs', 'release', 'installer', 'node_modules', '__pycache__', '.git', '.github'}
+TOP_SKIP = {'tools', 'docs', 'release', 'installer', '.git', '.github'}   # developer-only, at the repo top level only
+SKIP_DIRS = {'node_modules', '__pycache__'}                                  # anywhere
 SKIP_FILES = {'.gitignore', '.gitattributes', 'Publish to GitHub.bat', 'preview_sheet.png'}
 EXE = REPO / 'release' / 'AuraSlide.exe'
 
@@ -17,7 +18,7 @@ n = 0
 with zipfile.ZipFile(OUT, 'w', zipfile.ZIP_DEFLATED) as z:
     for p in sorted(REPO.rglob('*')):
         rel = p.relative_to(REPO)
-        if p.is_dir() or SKIP_DIRS & set(rel.parts) or rel.name in SKIP_FILES:
+        if p.is_dir() or rel.parts[0] in TOP_SKIP or SKIP_DIRS & set(rel.parts) or rel.name in SKIP_FILES:
             continue
         z.write(p, rel.as_posix()); n += 1
     if EXE.exists():

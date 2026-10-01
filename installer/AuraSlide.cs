@@ -61,10 +61,11 @@ namespace AuraSlide
                   "  args: " + string.Join(" ", args));
 
             bool update = HasArg(args, "--update"), repair = HasArg(args, "--repair");
+            FromApp = HasArg(args, "--from-app");   // started by the app's update button: it reloads itself, so open no new window
             if (update || repair)
             {
                 // The installed copy cannot replace itself while it runs: carry on from a copy in %TEMP%.
-                if (Paths.SelfIsInstalled) { RelaunchFromTemp(update ? "--update" : "--repair"); return 0; }
+                if (Paths.SelfIsInstalled) { RelaunchFromTemp((update ? "--update" : "--repair") + (FromApp ? " --from-app" : "")); return 0; }
                 return RunInstaller(update ? Mode.Update : Mode.Repair, null);
             }
             if (Paths.SelfIsInstalled)
@@ -78,6 +79,7 @@ namespace AuraSlide
             return RunInstaller(Paths.IsInstalled ? Mode.AlreadyInstalled : Mode.Install, null);
         }
 
+        public static bool FromApp;
         static int RunInstaller(Mode mode, string reason)
         {
             bool fresh;
@@ -546,7 +548,7 @@ namespace AuraSlide
         }
 
         // null when the app window is opening; otherwise a problem code: engine | python | server
-        public static string Start()
+        public static string Start(bool openWindow = true)
         {
             int port = Cfg.Port();
             string url = Url(port);
@@ -571,7 +573,7 @@ namespace AuraSlide
                 }
                 if (!up) { Log.W("server did not answer in 30 s"); return "server"; }
             }
-            OpenWindow(url);
+            if (openWindow) OpenWindow(url);
             return null;
         }
 
@@ -787,7 +789,7 @@ namespace AuraSlide
             Thread t = new Thread(() =>
             {
                 string problem;
-                try { problem = Launcher.Start(); }
+                try { problem = Launcher.Start(!Program.FromApp); }
                 catch (Exception ex) { Log.W("launch: " + ex); problem = "server"; }
                 BeginInvoke((Action)(() =>
                 {
