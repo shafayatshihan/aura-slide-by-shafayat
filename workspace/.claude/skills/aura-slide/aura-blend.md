@@ -33,24 +33,42 @@ This is the owner's rule, and it applies in this folder even though the rulebook
 The device makes a deck feel like one piece. Use it on the art, the kicker and the emphasis; never mix devices
 from two themes.
 
+## 4. Diagrams are illustrations, never boring boxes
+Do not make plain boxed flowcharts or default line and bar graphs. Show a process or a result as an illustration.
+**Flowcharts** become a picture of what happens. Examples:
+- a pipeline the material really travels through
+- a machine the reader can see working
+- a loop drawn as a cycle, not boxes joined by arrows
+**Graphs** become a picture of the data. Examples:
+- bottles filling to each value
+- a thermometer going down a borehole
+- a wing tilting while its lift arrow grows
+
+Make illustrations move:
+- Use 2D animation (flow along pipes, turning gears, rising bubbles, a marker tracing a curve), and 3D when depth
+  helps understanding (three.js is in `.aura/engine`).
+- Loops are seamless and calm: 3–6 s cycles, no flashing.
+- The slide must still read correctly as a still frame, for the PDF and PowerPoint backups.
+
+Real numbers still need real axes: label the values, keep the scale honest, and say "Sample data" whenever the
+numbers are illustrative.
+
 ## The five Aura themes
 | # | Theme | Brand DNA | Fonts (all public licence) | Colour blend | Signature device |
 |---|---|---|---|---|---|
 | 1 | **Pink Punch** | Gumroad | Anton (display, uppercase) + Work Sans (text) | cream canvas · pink block · yellow, orange, teal, red pops | black outlines + hard 8 px black shadow, pill kicker, pink highlighter on one phrase |
 | 2 | **Bold Blue** | Coinbase | Plus Jakarta Sans 800 (display) + Work Sans (text) | pure white · Coinbase blue block · black | flat geometric (Bauhaus) shapes; blue emphasis phrase |
 | 3 | **Flat-Pack** | IKEA | Noto Sans 800 (display) + Noto Sans 400 (text) | pure white · grey card · IKEA blue · IKEA yellow | flat-pack assembly manual (numbered steps, parts with "6x", the happy figure), yellow price-tag kicker, blue emphasis phrase |
-| 4 | **Happy Headspace** | Headspace | Quicksand 700 (display) + DM Sans (text) + Reno Mono (label) | pure white · orange, gold, amber, pink, purple, teal-navy | smiling blob characters, gold pill kicker, orange squiggle underline |
-| 5 | **Yellow Frame** | National Geographic | Source Serif 4 (display) + Open Sans (text, uppercase label) | pure white · black · the yellow border; **never a dark background** | a bright daylight nature "photograph" inside the thick yellow rectangle; yellow-rectangle mark before the kicker |
+| 4 | **Happy Headspace** | Headspace | Quicksand 700 (display) + DM Sans (text) + Reno Mono (label) | pure white · **orange first**, then gold, amber, purple, teal-navy; pink only as a rare small accent | soft round shapes and blobs, **no faces** (decks are often formal), gold pill kicker, orange squiggle underline |
+| 5 | **Yellow Frame** | National Geographic | Source Serif 4 (display) + Open Sans (text, uppercase label) | pure white · the yellow border · **black as the signature ink**: black label tags with white capitals, a heavy black rule above the kicker, black pipes, arrows and data marks; **never a dark background** | a bright daylight documentary illustration inside the thick yellow rectangle; yellow-rectangle mark before the kicker |
 
 Brand files:
 - power-design library: `brands/coinbase`
 - this skill folder: `brands/gumroad`, `brands/headspace`, `brands/ikea`, `brands/national-geographic`.
   IKEA and National Geographic were extracted with Firecrawl.
-- `brands/mailchimp`, `brands/nothing` and `brands/polaroid` are kept as spares; they are not Aura themes.
 
 ## Font licences (engine/fonts)
-- **SIL Open Font License:** Anton, Plus Jakarta Sans, DM Sans, DM Mono, Geist, Geist Mono, Doto, Fraunces, Jost,
-  Noto Sans, Source Serif 4, Open Sans, Work Sans, Quicksand.
+- **SIL Open Font License:** Anton, Plus Jakarta Sans, DM Sans, Noto Sans, Source Serif 4, Open Sans, Work Sans, Quicksand.
 - **CC BY 4.0:** Reno Mono. Credit "Reno Mono by Renaud Futterer" wherever the fonts are listed.
 
 All of these may be embedded in slides and shared.

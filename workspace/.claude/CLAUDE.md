@@ -52,3 +52,9 @@ Style every deck with `.claude/skills/aura-slide/aura-blend.md`. It covers:
 
 Their brand files are in `.claude/skills/aura-slide/brands/` and in power-design's `brands/`. Aura Blend works inside
 the rest of power-design's rules and the HARD RULES, never against them.
+
+**The user's look:** use the theme chosen in the form (`brief.md` → *Look*). If it says "Claude chooses", pick the Aura
+theme that best suits the topic and audience and tell the user which one you picked.
+
+**Diagrams rule:** never make boring boxed flowcharts or default graphs. Turn every process and result into an
+illustration, animated in 2D (sometimes 3D) where it helps. See section 4 of `aura-blend.md`.

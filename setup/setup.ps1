@@ -136,7 +136,10 @@ function Step-Folder {
             '3 - Put your files here\Journal papers', '3 - Put your files here\Anything else',
             '4 - Your slides\Older versions', '.aura\engine', '.aura\temp', '.aura\logs', '.aura\brief', '.aura\icon')
   foreach ($d in $dirs) { New-Item -ItemType Directory -Force -Path (Join-Path $Root $d) | Out-Null }
-  # engine + Claude project files (user folders are never overwritten)
+  # engine + Claude project files: replaced cleanly so old versions never pile up (user folders are never touched;
+  # node_modules and Claude's own settings.local.json are kept)
+  Get-ChildItem (Join-Path $Aura 'engine') -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'node_modules' } | Remove-Item -Recurse -Force
+  Get-ChildItem (Join-Path $Root '.claude') -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'settings.local.json' } | Remove-Item -Recurse -Force
   Get-ChildItem (Join-Path $Repo 'engine') -Force | Where-Object { $_.Name -ne 'node_modules' } | Copy-Item -Destination (Join-Path $Aura 'engine') -Recurse -Force
   Copy-Item (Join-Path $Repo 'workspace\.claude') $Root -Recurse -Force   # includes the power-design skill (MIT, shipped in the repo)
   Copy-Item (Join-Path $Repo 'workspace\.vscode') $Root -Recurse -Force
@@ -189,6 +192,12 @@ function Step-Npm {
 }
 function Step-Pip {
   $venv = Join-Path $Aura 'venv'; $py = Join-Path $venv 'Scripts\python.exe'
+  # a venv only works while the Python it was made from exists; one made by another Windows account is rebuilt here
+  $vcfg = Join-Path $venv 'pyvenv.cfg'
+  if (Test-Path $vcfg) {
+    $pyHome = ((Get-Content $vcfg | Where-Object { $_ -match '^\s*home\s*=' } | Select-Object -First 1) -replace '^\s*home\s*=\s*', '').Trim()
+    if (-not $pyHome -or -not (Test-Path (Join-Path $pyHome 'python.exe'))) { Remove-Item $venv -Recurse -Force }
+  }
   if (-not (Test-Path $py)) {
     $base = Base-Python; if (-not $base) { throw 'Python is missing.' }
     $c = Run 'making a private Python' $base ('-m venv "' + $venv + '"'); if (-not (Test-Path $py)) { throw "Could not make the Python environment (code $c)." }

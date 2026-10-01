@@ -10,7 +10,9 @@ extracted_via: Firecrawl (branding + markdown formats, confidence 0.85), 2026-10
 ## Visual Theme & Atmosphere
 Formal, documentary and iconic: white pages, black type, square corners, big serif headlines, and one unmistakable
 device, the thick yellow rectangle that frames the world's best nature photography. Light theme.
-**Aura rule: never a dark background in this theme**, even though the magazine often uses black.
+**Aura rule: never a dark background in this theme.** Black is still a signature colour. Use it as ink, never as
+a field: black label tags with white capitals (infographic callouts), a heavy black rule above the kicker, black
+pipes, arrows, outlines and data marks.
 
 ## Colors
 | Role | Hex | Notes |

@@ -27,6 +27,7 @@ Reply in this shape, filled with their details:
 > ✨ **Your aura is ready to shine.**
 > **Talk:** <type> — "<title>" · <minutes> minutes · <slides or "I'll choose the number of slides">
 > **Presenters:** <names> · **Supervisor:** <name if given>
+> **Look:** <the theme they picked, or "I'll choose the best look for you">
 > **I found:** <n> files — <one line per non-empty folder, e.g. "Report: thesis_final.pdf">
 > **Missing:** <anything important that is empty, e.g. "no images yet — that's fine, I can make illustrations">
 >

@@ -9,12 +9,6 @@ UA = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
 FAMILIES = [('Anton', 'wght@400', 'ofl/anton'),
             ('Plus Jakarta Sans', 'wght@200..800', 'ofl/plusjakartasans'),
             ('DM Sans', 'opsz,wght@9..40,100..1000', 'ofl/dmsans'),
-            ('Geist', 'wght@100..900', 'ofl/geist'),
-            ('Geist Mono', 'wght@100..900', 'ofl/geistmono'),
-            ('Doto', 'wght@100..900', 'ofl/doto'),
-            ('Fraunces', 'opsz,wght@9..144,100..900', 'ofl/fraunces'),
-            ('Jost', 'wght@100..900', 'ofl/jost'),
-            ('DM Mono', 'wght@400;500', 'ofl/dmmono'),
             ('Noto Sans', 'wght@100..900', 'ofl/notosans'),
             ('Source Serif 4', 'opsz,wght@8..60,200..900', 'ofl/sourceserif4'),
             ('Open Sans', 'wght@300..800', 'ofl/opensans')]

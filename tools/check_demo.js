@@ -7,7 +7,7 @@ const dir = path.resolve(__dirname, '..', 'docs', 'screenshots', process.argv[2]
   const b = await chromium.launch({ channel: 'msedge' });
   const p = await b.newPage({ viewport: { width: 1920, height: 1080 } });
   const summary = [];
-  for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.html')).sort()) {
+  for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.html') && !f.startsWith('card-')).sort()) {
     await p.goto('file:///' + path.join(dir, f).replace(/\\/g, '/'), { waitUntil: 'networkidle' });
     await p.evaluate(() => document.fonts.ready); await p.waitForTimeout(400);
     const r = await p.evaluate(() => {
@@ -35,7 +35,7 @@ const dir = path.resolve(__dirname, '..', 'docs', 'screenshots', process.argv[2]
       const contrast = texts.map(e => { const s = getComputedStyle(e), fs = parseFloat(s.fontSize), w = parseInt(s.fontWeight);
         const fg = parse(e.tagName === 'text' ? (s.fill.startsWith('rgb') ? s.fill : s.color) : s.color);
         let bg = bgOf(e); if (e.tagName === 'text') { const rect = e.closest('svg').querySelectorAll('rect'); const q = e.getBBox();
-          rect.forEach(rc => { const rb = rc.getBBox(); if (q.x >= rb.x && q.x + q.width <= rb.x + rb.width && q.y >= rb.y && q.y + q.height <= rb.y + rb.height) bg = parse(getComputedStyle(rc).fill); }); }
+          rect.forEach(rc => { const rb = rc.getBBox(); if (q.x >= rb.x && q.x + q.width <= rb.x + rb.width && q.y >= rb.y && q.y + q.height <= rb.y + rb.height) { const fc = parse(getComputedStyle(rc).fill); if (fc.a > 0) bg = fc; } }); }
         const cr = ratio(over(fg, bg), bg), large = fs >= 24 || (fs >= 18.66 && w >= 700);
         return { t: e.textContent.trim().slice(0, 22), cr: +cr.toFixed(2), need: large ? 3 : 4.5 }; });
       const worst = contrast.reduce((a, c) => (c.cr / c.need < a.cr / a.need ? c : a));

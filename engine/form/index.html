@@ -79,7 +79,17 @@ button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
 .done .big{font-size:64px;line-height:1}
 .phrase{display:inline-block;margin:10px 0 4px;padding:12px 22px;border-radius:14px;background:#1B1740;color:#fff;font:700 26px var(--f);letter-spacing:.02em}
 .hint{font-size:15px;color:var(--mute)}
-@media (max-width:720px){ .two,.row.p3,.row.p2,.row.s3{grid-template-columns:1fr} .review div{grid-template-columns:1fr} }
+.looks{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.look{position:relative}
+.look input{position:absolute;opacity:0;inset:0;cursor:pointer;z-index:1}
+.look span{display:flex;flex-direction:column;height:100%;border:2px solid var(--line);border-radius:16px;overflow:hidden;background:#FCFBFF;cursor:pointer}
+.look video{display:block;width:100%;aspect-ratio:16/9;background:#ECEAF3}
+.look b{display:block;padding:10px 14px 0;font-size:18px}
+.look small{display:block;padding:2px 14px 12px;color:var(--mute);font-size:15px}
+.look span.auto{justify-content:center;min-height:180px;text-align:center}
+.look input:checked + span{border-color:var(--a2);box-shadow:0 0 0 4px rgba(77,124,255,.18)}
+.look input:focus-visible + span{outline:3px solid var(--a3);outline-offset:2px}
+@media (max-width:720px){ .looks{grid-template-columns:1fr} .two,.row.p3,.row.p2,.row.s3{grid-template-columns:1fr} .review div{grid-template-columns:1fr} }
 @media (prefers-reduced-motion:no-preference){ section.on{animation:in .25s ease} @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}} }
 </style>
 </head>
@@ -115,8 +125,21 @@ button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
   </div>
 </section>
 
+<section data-step="Your look">
+  <div class="kick">Step 2</div><h2>Pick a look for your slides</h2>
+  <p class="lead">Each video shows one style: a picture slide first, then how a process looks in that style. Pick the one you like, or let Claude choose.</p>
+  <div class="looks" role="radiogroup" aria-label="Slide look">
+    <label class="look"><input type="radio" name="look" data-k="look.theme" value="Pink Punch"><span><video src="/themes/1-pink-punch.mp4" poster="/themes/1-pink-punch.jpg" muted loop playsinline preload="none" aria-label="Pink Punch demo"></video><b>Pink Punch</b><small>Loud and playful: bold outlines, hard shadows, hot pink.</small></span></label>
+    <label class="look"><input type="radio" name="look" data-k="look.theme" value="Bold Blue"><span><video src="/themes/2-bold-blue.mp4" poster="/themes/2-bold-blue.jpg" muted loop playsinline preload="none" aria-label="Bold Blue demo"></video><b>Bold Blue</b><small>Clean and confident: strong blue, black and simple shapes.</small></span></label>
+    <label class="look"><input type="radio" name="look" data-k="look.theme" value="Flat-Pack"><span><video src="/themes/3-flat-pack.mp4" poster="/themes/3-flat-pack.jpg" muted loop playsinline preload="none" aria-label="Flat-Pack demo"></video><b>Flat-Pack</b><small>Friendly and clear: instruction-manual drawings in blue and yellow.</small></span></label>
+    <label class="look"><input type="radio" name="look" data-k="look.theme" value="Happy Headspace"><span><video src="/themes/4-happy-headspace.mp4" poster="/themes/4-happy-headspace.jpg" muted loop playsinline preload="none" aria-label="Happy Headspace demo"></video><b>Happy Headspace</b><small>Warm and calm: soft round shapes, orange first.</small></span></label>
+    <label class="look"><input type="radio" name="look" data-k="look.theme" value="Yellow Frame"><span><video src="/themes/5-yellow-frame.mp4" poster="/themes/5-yellow-frame.jpg" muted loop playsinline preload="none" aria-label="Yellow Frame demo"></video><b>Yellow Frame</b><small>Formal and documentary: serif titles and the yellow frame.</small></span></label>
+    <label class="look"><input type="radio" name="look" data-k="look.theme" value="Claude chooses"><span class="auto"><b>Let Claude choose</b><small>Claude picks the look that suits your topic and audience.</small></span></label>
+  </div>
+</section>
+
 <section data-step="People">
-  <div class="kick">Step 2</div><h2>Who is presenting?</h2><p class="lead">These go on the title slide and the last slide.</p>
+  <div class="kick">Step 3</div><h2>Who is presenting?</h2><p class="lead">These go on the title slide and the last slide.</p>
   <div id="presenters"></div>
   <button type="button" class="add" id="addPresenter">+ Add another presenter</button>
   <div class="two">
@@ -128,7 +151,7 @@ button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
 </section>
 
 <section data-step="Audience and time">
-  <div class="kick">Step 3</div><h2>Who is watching, and for how long?</h2><p class="lead">This decides how simple the words are and how many slides you get.</p>
+  <div class="kick">Step 4</div><h2>Who is watching, and for how long?</h2><p class="lead">This decides how simple the words are and how many slides you get.</p>
   <label class="q">Who will watch? <small>(tick all that fit)</small></label>
   <div class="opts">
     <label class="opt"><input type="checkbox" data-k="audience.who" value="Examiners / teachers"><span>Examiners or teachers</span></label>
@@ -153,7 +176,7 @@ button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
 </section>
 
 <section data-step="Your work">
-  <div class="kick">Step 4</div><h2>Tell us about your work</h2><p class="lead">Short answers are fine. Your report files will fill in the details.</p>
+  <div class="kick">Step 5</div><h2>Tell us about your work</h2><p class="lead">Short answers are fine. Your report files will fill in the details.</p>
   <label class="q" for="field">Subject area</label><input type="text" id="field" data-k="work.field"><p class="ex">Example: fluid mechanics, molecular dynamics, power electronics, statistics, microbiology</p>
   <label class="q" for="sum">In one sentence, what did you do?</label><textarea id="sum" data-k="work.summary"></textarea>
   <p class="ex">Example: We built a low-cost sensor that measures soil moisture and sends it to a phone.</p>
@@ -172,7 +195,7 @@ button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
 </section>
 
 <section data-step="Slide plan">
-  <div class="kick">Step 5</div><h2>What should each slide cover?</h2><p class="lead">Optional. Leave it on and Claude plans the slides for you.</p>
+  <div class="kick">Step 6</div><h2>What should each slide cover?</h2><p class="lead">Optional. Leave it on and Claude plans the slides for you.</p>
   <label class="switch"><input type="checkbox" id="auto" data-k="plan.auto" checked> Let Claude plan the slides</label>
   <div id="planWrap" hidden>
     <p class="ex">Write one line per slide. You can pick a file from your folders to show on that slide.</p>
@@ -182,7 +205,7 @@ button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
 </section>
 
 <section data-step="Your files">
-  <div class="kick">Step 6</div><h2>Your files</h2>
+  <div class="kick">Step 7</div><h2>Your files</h2>
   <p class="lead">Put your report, pictures and data into the folders, then press <b>Check again</b>. Claude reads everything here.</p>
   <div class="btnrow"><button type="button" class="ghost" id="openFiles">Open my files folder</button><button type="button" class="ghost" id="refresh">Check again</button></div>
   <div class="files" id="fileList"></div>
@@ -191,7 +214,7 @@ button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
 </section>
 
 <section data-step="Special content">
-  <div class="kick">Step 7</div><h2>Anything special on the slides?</h2><p class="lead">Tick what you need.</p>
+  <div class="kick">Step 8</div><h2>Anything special on the slides?</h2><p class="lead">Tick what you need.</p>
   <div class="opts">
     <label class="opt"><input type="checkbox" data-k="content.include" value="Equations"><span>Equations</span></label>
     <label class="opt"><input type="checkbox" data-k="content.include" value="Tables"><span>Tables</span></label>
@@ -208,7 +231,7 @@ button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
 </section>
 
 <section data-step="On the day">
-  <div class="kick">Step 8</div><h2>On presentation day</h2><p class="lead">So your slides work on the day.</p>
+  <div class="kick">Step 9</div><h2>On presentation day</h2><p class="lead">So your slides work on the day.</p>
   <label class="q">Where will you show it?</label>
   <div class="opts">
     <label class="opt"><input type="checkbox" data-k="delivery.where" value="Projector in a room"><span>Projector in a room</span></label>
@@ -240,7 +263,7 @@ button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
 </section>
 
 <section data-step="Anything else">
-  <div class="kick">Step 9</div><h2>Anything else?</h2><p class="lead">Last step. All optional.</p>
+  <div class="kick">Step 10</div><h2>Anything else?</h2><p class="lead">Last step. All optional.</p>
   <label class="q" for="ex1">Anything Claude should avoid?</label><input type="text" id="ex1" data-k="extra.avoid"><p class="ex">Example: no jokes, do not show our raw data</p>
   <label class="q" for="ex2">When do you need the slides?</label><input type="date" id="ex2" data-k="extra.deadline">
   <label class="q" for="ex3">Other notes for Claude</label><textarea id="ex3" data-k="extra.notes"></textarea>
@@ -384,11 +407,13 @@ button:focus-visible{outline:3px solid var(--a3);outline-offset:2px}
     next.textContent = review ? 'Save' : 'Next';
     err.classList.remove('on');
     if (secs[cur].dataset.step === 'Your files') loadFiles();
+    [].forEach.call(f.querySelectorAll('.look video'), function(v){
+      if (secs[cur].dataset.step === 'Your look') { v.preload = 'auto'; var pl = v.play(); if (pl) pl.catch(function(){}); } else v.pause(); });
     if (review) drawReview();
     window.scrollTo(0, 0);
   }
   function drawReview(){
-    var rows = [['Type', get(state, 'basics.typeOther') || get(state, 'basics.type')], ['Title', get(state, 'basics.title')],
+    var rows = [['Type', get(state, 'basics.typeOther') || get(state, 'basics.type')], ['Title', get(state, 'basics.title')], ['Look', get(state, 'look.theme') || 'Claude chooses'],
       ['Presenters', (get(state, 'people.presenters') || []).map(function(p){ return p.name; }).filter(Boolean).join(', ')],
       ['Supervisor', get(state, 'people.supervisor')], ['Time limit', get(state, 'audience.minutes') ? get(state, 'audience.minutes') + ' minutes' : ''],
       ['Slides', get(state, 'audience.slides') || 'Claude decides'], ['Subject', get(state, 'work.field')], ['What you did', get(state, 'work.summary')],

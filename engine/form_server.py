@@ -2,7 +2,7 @@
 only) and saves the answers to .aura/brief/brief.json plus a readable brief.md for Claude.
 Also lists the files the user has dropped into "3 - Put your files here", so slides can point at them.
 Stops by itself after 45 minutes without use. Standard library only."""
-import json, os, sys, threading, time, datetime, subprocess
+import json, os, re, sys, threading, time, datetime, subprocess
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -40,6 +40,8 @@ def as_markdown(b):
     s = b.get('basics', {})
     L.append('## The talk'); row('Type', s.get('typeOther') or s.get('type')); row('Title', s.get('title')); row('Subtitle', s.get('subtitle'))
     row('Date', s.get('date')); row('Event / course', s.get('event'))
+    lk = b.get('look', {})
+    L.append('\n## Look'); row('Theme', lk.get('theme') or 'Claude chooses (pick the Aura theme that suits the topic and audience)')
     p = b.get('people', {})
     L.append('\n## People')
     for m in p.get('presenters', []):
@@ -95,12 +97,26 @@ class H(BaseHTTPRequestHandler):
         if self.path == '/icon.png':
             ic = ENGINE / 'form' / 'icon.png'
             return self.send(200, ic.read_bytes(), 'image/png') if ic.exists() else self.send(404, {})
+        if self.path.startswith('/themes/'):
+            return self.theme_file(self.path[len('/themes/'):].split('?')[0])
         if self.path == '/api/ping': return self.send(200, {'ok': True})
         if self.path == '/api/files': return self.send(200, list_files())
         if self.path == '/api/brief':
             f = BRIEF / 'brief.json'
             return self.send(200, json.loads(f.read_text(encoding='utf-8')) if f.exists() else {})
         self.send(404, {'error': 'not found'})
+
+    def theme_file(self, name):
+        """Theme demo videos and posters for the form. Supports byte ranges so the browser can loop and seek."""
+        f = ENGINE / 'form' / 'themes' / name
+        if not re.fullmatch(r'[\w-]+\.(mp4|jpg)', name) or not f.is_file(): return self.send(404, {'error': 'not found'})
+        data, ctype = f.read_bytes(), ('video/mp4' if name.endswith('.mp4') else 'image/jpeg')
+        m = re.fullmatch(r'bytes=(\d*)-(\d*)', self.headers.get('Range', ''))
+        a, z = (int(m.group(1) or 0), min(int(m.group(2) or len(data) - 1), len(data) - 1)) if m else (0, len(data) - 1)
+        self.send_response(206 if m else 200); self.send_header('Content-Type', ctype); self.send_header('Accept-Ranges', 'bytes')
+        if m: self.send_header('Content-Range', f'bytes {a}-{z}/{len(data)}')
+        self.send_header('Content-Length', str(z - a + 1)); self.send_header('Cache-Control', 'max-age=3600'); self.end_headers()
+        self.wfile.write(data[a:z + 1])
 
     def do_POST(self):
         global last_hit; last_hit = time.time()

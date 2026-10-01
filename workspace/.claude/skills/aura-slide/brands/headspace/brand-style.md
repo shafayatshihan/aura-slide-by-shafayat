@@ -15,8 +15,8 @@ bright multi-colour palette built around the signature orange. Light theme.
 | Role | Hex | Notes |
 |---|---|---|
 | Background | `#ffffff` | `#f9f4f2` warm off-white for soft sections |
-| Primary | `#ff7300` | smiley orange (character faces, big shapes; never small text: 2.9:1 on white) |
-| Multi-accent set | `#ffce00` gold · `#ffa500` amber · `#ffa1cc` candy pink · `#3b197f` meditative purple · `#27455c` teal-navy | used together in illustrations |
+| Primary | `#ff7300` | Headspace orange: the lead colour of every Aura slide in this theme (big shapes, lines, highlights; never small text: 2.9:1 on white) |
+| Multi-accent set | `#ffce00` gold · `#ffa500` amber · `#3b197f` meditative purple · `#27455c` teal-navy · `#ffa1cc` candy pink (rare, small) | supporting colours in illustrations, orange always dominant |
 | Text Primary | `#2d2c2b` | warm charcoal, never pure black |
 | Text Muted | `#44423f` | body copy |
 | Border | `#e2ded9` | |
@@ -45,8 +45,8 @@ bright multi-colour palette built around the signature orange. Light theme.
 - Audience: anyone looking after their mind
 
 ## Illustration
-Smiling characters built from circles and soft blobs: closed happy eyes (∩ arcs), simple smile, flat fills from the
-multi-accent set, a coloured ground ellipse. No outlines, no gradients.
+Soft round shapes and blobs with flat fills, orange first. **In Aura there are no faces or characters**, because
+these decks are often used in formal settings. No outlines, no gradients.
 
 ## Quick Reference (for Claude)
 ```css
