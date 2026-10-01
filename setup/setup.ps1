@@ -158,7 +158,7 @@ function Step-Folder {
   Copy-Item (Join-Path $Repo 'workspace\.claude') $Root -Recurse -Force   # includes the power-design skill (MIT, shipped in the repo)
   Copy-Item (Join-Path $PSScriptRoot 'icon\aura-slide.ico') (Join-Path $Aura 'icon') -Force
   Copy-Item (Join-Path $PSScriptRoot 'aura.config.json') $Aura -Force
-  $guide = Join-Path $Repo 'docs\1 - Read me first.pdf'; if (Test-Path $guide) { Copy-Item $guide $Root -Force }
+  $oldGuide = Join-Path $Root '1 - Read me first.pdf'; if (Test-Path $oldGuide) { Remove-Item $oldGuide -Force }   # guide retired in 0.3
   foreach ($h in @('.aura', '.claude')) { (Get-Item (Join-Path $Root $h) -Force).Attributes = 'Directory, Hidden, System' }
   if ($made) { return 'created ' + $Root } else { return 'already there, your files are untouched' }
 }

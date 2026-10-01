@@ -1,6 +1,6 @@
 """Builds release/Aura-Slide-Setup.zip: what users download. Files sit at the ZIP root, so "Extract All" gives one folder
 with "Setup Aura-Slide" directly inside. Developer-only parts (tools, screenshots, GitHub workflow) are left out; the
-guide PDF is included so setup can copy it into the user's folder. The installer's C# source is left out too; the built
+The installer's C# source is left out too; the built
 release/AuraSlide.exe (python tools/build_exe.py, run first) is shipped at the ZIP root as "AuraSlide.exe", where
 setup.ps1 picks it up. Used locally and by the GitHub release workflow.
 usage: python tools/make_release.py"""
@@ -10,7 +10,6 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 OUT = REPO / 'release' / 'Aura-Slide-Setup.zip'
 SKIP_DIRS = {'tools', 'docs', 'release', 'installer', 'node_modules', '__pycache__', '.git', '.github'}
 SKIP_FILES = {'.gitignore', '.gitattributes', 'Publish to GitHub.bat', 'preview_sheet.png'}
-GUIDE = REPO / 'docs' / '1 - Read me first.pdf'
 EXE = REPO / 'release' / 'AuraSlide.exe'
 
 OUT.parent.mkdir(exist_ok=True)
@@ -21,8 +20,6 @@ with zipfile.ZipFile(OUT, 'w', zipfile.ZIP_DEFLATED) as z:
         if p.is_dir() or SKIP_DIRS & set(rel.parts) or rel.name in SKIP_FILES:
             continue
         z.write(p, rel.as_posix()); n += 1
-    if GUIDE.exists():
-        z.write(GUIDE, 'docs/' + GUIDE.name); n += 1
     if EXE.exists():
         z.write(EXE, EXE.name); n += 1
 version = json.loads((REPO / 'setup' / 'aura.config.json').read_text(encoding='utf-8'))['version']
