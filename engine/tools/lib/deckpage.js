@@ -71,10 +71,12 @@ function playwright() {
   catch (e) { return require('playwright-core'); }
 }
 async function launch() {
+  if (process.env.AURA_TEST_NO_BROWSER) throw new Error('Microsoft Edge could not be started for the check: (test switch AURA_TEST_NO_BROWSER)');
   const { chromium } = playwright();
-  try { return await chromium.launch({ channel: 'msedge' }); }
+  const extraArgs = (process.env.AURA_BROWSER_ARGS || '').split(/\s+/).filter(Boolean);   // e.g. --use-angle=swiftshader to test a software GL
+  try { return await chromium.launch({ channel: 'msedge', args: extraArgs }); }
   catch (e) {
-    try { return await chromium.launch({ channel: 'chrome' }); }
+    try { return await chromium.launch({ channel: 'chrome', args: extraArgs }); }
     catch (e2) { throw new Error('Microsoft Edge could not be started for the check: ' + e.message.split('\n')[0]); }
   }
 }
@@ -105,10 +107,29 @@ async function slideInfo(page) {
   return page.evaluate(() => {
     if (window.Aura && Aura.slides) return Aura.slides();
     return Array.from(document.querySelectorAll('.slide'), (s, i) => ({ index: i, number: i + 1,
-      title: (s.querySelector('h1,h2,h3') || {}).textContent || '', notes: '', minutes: null, kind: 'content' }));
+      title: (s.querySelector('h1,h2,h3') || {}).textContent || '', minutes: null, kind: 'content',
+      // a deck without the Aura runtime: its notes are the .notes / [data-aura-notes] element, as finalize.js reads them
+      notes: (() => { const n = s.querySelector('[data-aura-notes], .notes'); return n ? n.textContent.replace(/\s+/g, ' ').trim() : ''; })() }));
   });
+}
+
+// B-02: what the browser actually rendered. A checker that measures a deck whose 3D never started has measured the wrong deck,
+// so every checker calls this right after openDeck() and treats `problem` as "could not verify" (never a pass).
+async function probeRender(page, { expectHttp = true } = {}) {
+  const r = await page.evaluate(() => {
+    const holders = Array.from(document.querySelectorAll('.aura-3d[data-scene]'));
+    return { protocol: location.protocol, runtime: !!window.Aura, ready: document.documentElement.dataset.auraReady === '1',
+      holders: holders.length, fallback: holders.filter(h => h.hasAttribute('data-fallback')).length,
+      drawn: holders.filter(h => h.querySelector('canvas') || Array.from(h.querySelectorAll('img')).some(i => i.naturalWidth > 0)).length,   // all-slides mode swaps the canvas for a still frame <img>
+      slides: document.querySelectorAll('.deck > .slide, body > .slide').length };
+  });
+  let problem = '';
+  if (expectHttp && r.protocol !== 'http:') problem = `the deck was opened over ${r.protocol}, where three.js cannot load`;
+  else if (r.runtime && !r.ready) problem = 'the deck did not finish drawing (the runtime never reported ready), so what was measured is not the final deck';
+  else if (!r.slides) problem = 'no slides were found in the page';
+  return Object.assign(r, { problem });
 }
 
 const rel = (root, f) => (root ? path.relative(root, f) : f).split(path.sep).join('/');
 
-module.exports = { ENGINE, findAuraRoot, resolveDeck, serveRootFor, serve, launch, openDeck, shootSlides, slideInfo, rel };
+module.exports = { probeRender, ENGINE, findAuraRoot, resolveDeck, serveRootFor, serve, launch, openDeck, shootSlides, slideInfo, rel };

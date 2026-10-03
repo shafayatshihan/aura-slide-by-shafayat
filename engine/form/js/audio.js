@@ -93,6 +93,7 @@ function createCore(ctx, volume) {
     // Register a short-lived voice: nodes are disconnected when its source ends, so they can be collected.
     track(src, nodes, end) {
       core.live++; core.created++; core.nodes += nodes.length; core.ends.push(end);
+      if (core.ends.length > 512) core.pending(ctx.currentTime);   // keep the list bounded (it used to be trimmed only by the offline renderer)
       src.onended = () => { core.live--; for (const n of nodes) { try { n.disconnect(); } catch (e) { /* already gone */ } } };
     },
     pending(t) { core.ends = core.ends.filter(e => e > t); return core.ends.length; },
@@ -101,7 +102,6 @@ function createCore(ctx, volume) {
       s.start(t, loop ? 0 : Math.random() * Math.max(0.01, 1.95 - dur)); s.stop(t + dur);
       return s;
     },
-    destroy() { try { mix.disconnect(); verbOut.disconnect(); clip.disconnect(); } catch (e) { /* ignore */ } },
   };
   return core;
 }

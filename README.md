@@ -26,6 +26,8 @@ alone; delete it yourself once you have checked your files.
 3. Press **make my slides**. Claude builds them while you watch, and asks in the chat if it needs anything.
 4. Your finished slides appear in your library and in **`4 - Your slides`**. Open one to change it with Claude.
 
+**Before presentation day:** the deck runs in Microsoft Edge or Google Chrome. Open the finished file once, in one of those two, on the computer you will present from. Firefox, Safari and very old browsers may not show the 3D scenes (the deck shows a message when it detects this). Always keep the **PDF** that Lumi makes next to it as your backup.
+
 ## Something went wrong?
 
 - Run `Lumi.exe` again and choose **Repair Lumi**. It continues where it stopped.
@@ -43,12 +45,15 @@ alone; delete it yourself once you have checked your files.
 | `engine/` | Copied to `.aura/engine`: the app server and web app, launchers, update, problem report, npm packages |
 | `workspace/` | Copied to the user folder: `.claude/` (settings, CLAUDE.md, the `aura-slide` skill) |
 | `tools/make_release.py` | Builds `release/Lumi-Setup.zip` (the files `Lumi.exe` downloads) |
-| `Publish to GitHub.bat` → `tools/publish.ps1` | One-click commit + push; the GitHub workflow then makes the release |
+| `Publish to GitHub.bat` → `tools/publish.ps1` | One-click commit + push (does not release; see Publishing) |
 
-**Publishing:** double-click `Publish to GitHub.bat`. It commits and pushes; then `.github/workflows/release.yml`
-builds `Lumi.exe` and `Lumi-Setup.zip` and uploads them to the release named after `version` in
-`setup/aura.config.json`. Same version: that release's files are replaced. New version: a new release is made. The
-links `releases/latest/download/Lumi.exe` and `.../Lumi-Setup.zip` always serve the newest build.
+**Publishing is deliberate.** Pushing to `main` does **not** release anything. `.github/workflows/release.yml` runs only
+when you push a tag `v<version>` or start it by hand (Actions, "Build release"). Before building it checks that
+(1) the version in `setup/aura.config.json` is a plain `X.Y.Z` (a `-dev` version never publishes), (2) the tag equals
+that version, and (3) no release of that version exists yet - it never overwrites published files (a manual run with
+"overwrite" ticked is the only way, for repairs). To ship: change `version` (drop `-dev`), commit and push, then
+`git tag v<version>` and `git push origin v<version>`. `Publish to GitHub.bat` only commits and pushes. The links
+`releases/latest/download/Lumi.exe` and `.../Lumi-Setup.zip` serve the newest release.
 
 ## License
 

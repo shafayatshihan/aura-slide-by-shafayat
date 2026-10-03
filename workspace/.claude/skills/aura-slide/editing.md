@@ -7,7 +7,8 @@ The editor sends one request per message, usually prefixed with the slide the us
 [slide 5] use the file pump-photo.jpg instead of the drawing
 [slide 2] q1: Bar heights
 ```
-- `[slide N]` is the 1-based slide number as the deck shows it now. No prefix = a request about the whole deck.
+- `[slide N]` is the 1-based slide number as the deck shows it now. No prefix = a request about the whole deck. On a reply that
+  answers your questions, N is the slide those questions were about.
 - "use the file <name>" means a file they just added to `3 - Put your files here/Anything else/` (look there first,
   then the other folders). It is read-only like all their files: copy it into the build folder's `assets/`.
 - The user may also have changed some texts **directly** in the editor. The app writes those straight into the build
@@ -15,16 +16,17 @@ The editor sends one request per message, usually prefixed with the slide the us
   they changed themselves.
 
 ## Which deck
-The deck is the one this conversation built: its build folder `.aura/temp/build/<slug>/` and its packed file
-`4 - Your slides/<Title>.html`. If you are not sure, find the build folder whose `index.html` `<title>` matches the
+The deck is the one this conversation built: its build folder `.aura/temp/build/<slug>/` and its packed file, which is in
+the deck's work folder (the `[deck-folder .aura/decks/<id>]` line; only an old one-shot deck has it in `4 - Your slides/`; see
+"Where you write" in `CLAUDE.md`). If you are not sure, find the build folder whose `index.html` `<title>` matches the
 packed file's name. Never hand-edit the packed file.
 
 ## Small change or bigger change?
 - **Small** (text on one slide, swap one picture, a colour, move or resize one element, add a source line, notes):
   just do it. No questions.
 - **Non-trivial** (add, remove, split or reorder slides; change the look; a change across many slides; anything that
-  could mean two different things): first ask with up to 3 `[[aura:choice …]]` lines (each with a sensible
-  default), `[[aura:ask]]` as the last line, end the turn, and continue when the answers come back.
+  could mean two different things): first ask (up to 3 questions; SKILL.md "Asking questions" has the syntax and limits),
+  `[[aura:ask]]` as the last line, end the turn, and continue when the answers come back.
 - **Full rebuild** (a new look for the whole deck, "start again", a new story, more than about half the slides
   changing): treat it as a rebuild (see "Packing" below).
 
@@ -39,20 +41,23 @@ packed file's name. Never hand-edit the packed file.
      not positions).
 2. `[[aura:stage=check]]` — `node .aura/engine/tools/deck_check.js .aura/temp/build/<slug>` (add `--notes` if the
    deck has speaker notes as a deliverable). Look at the picture of the slide you changed (`.aura/temp/shots/<slug>/`).
-   Fix until `RESULT: clean`. The HARD RULES apply to edits exactly as to the first build: if a request would need
-   text under 26 px, trim whitespace, shorten words or split the slide, and say so kindly.
-3. `[[aura:stage=export]]` — pack (see below), then
-   `node .aura/engine/tools/deck_check.js "4 - Your slides/<Title>.html" --no-shots`.
-   Backups: remake **only the ones that already exist** next to the deck — `<Title>.pdf` → `export_pdf.js`,
-   `<Title>.pptx` → `export_pptx.py`, `<Title> - speaker notes.docx` → `export_notes.py` (with `--timed` if it was
-   a timed script). Do not create backups they never had.
+   Fix until `RESULT: clean`. The HARD RULES apply to edits exactly as to the first build: if a request would break the
+   text floor (numbers table in `CLAUDE.md`), trim whitespace, shorten words or split the slide, and say so kindly.
+3. `[[aura:stage=export]]` — pack (see below), then check the packed file once:
+   `node .aura/engine/tools/deck_check.js "<packed file>" --no-shots`.
 4. `[[aura:stage=done]]` — one or two short lines: what changed, and anything they should look at. Then 3–5 fresh
    `[[aura:hint slide=N text="…"]]` lines for the deck as it is now, then the last line
-   `[[aura:done path="4 - Your slides/<Title>.html"]]` (same file as before).
+   `[[aura:done path="<packed file>"]]` (same file as before).
 
 ## Packing
-- **Edits:** pack to the **same file**, in place, without moving anything to Older versions:
-  `.aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py .aura/temp/build/<slug> --title "<Title>" --replace`
-  Use exactly the same `--title` as before so the file name does not change.
-- **Full rebuilds:** pack without `--replace`; the previous deck and its backups move to `4 - Your slides/Older
-  versions/` with the date first. Then remake the backups the deck had before.
+Where the file goes is "Where you write" in `CLAUDE.md`: the deck's work folder when the message carries a
+`[deck-folder .aura/decks/<id>]` line (the usual case), `4 - Your slides/` only for an old one-shot deck.
+- **Edits:** pack to the **same file**, in place, without moving anything:
+  `.aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py .aura/temp/build/<slug> --title "<Title>" --out ".aura/decks/<id>" --replace`
+  (old one-shot deck: no `--out`). Use exactly the same `--title` as before so the file name does not change. Make no
+  backups in a work folder: Finalize makes them.
+- **Old one-shot deck only:** remake **only the backups that already exist** next to the deck — `<Title>.pdf` →
+  `export_pdf.js`, `<Title>.pptx` → `export_pptx.py`, `<Title> - speaker notes.docx` → `export_notes.py` (`--timed` if it was
+  a timed script). Never create backups they never had.
+- **Full rebuilds:** pack without `--replace`; in `4 - Your slides/` the previous deck and its backups move to `Older
+  versions/` with the date first (then remake the backups the deck had before); in a work folder the file is replaced.

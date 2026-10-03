@@ -1,234 +1,312 @@
-// The first screen on every launch: the character in full mode and an animated check list from GET /api/health.
-// Failed checks get a friendly fix button (POST /api/fix/<name>, then GET /api/fix/status, or sign-in -> poll health).
-// A free Claude plan gets a clear premium message; a newer version a non-blocking banner. All green -> onDone().
+// The first screen on every launch: the character in full mode, then a calm progress bar with a little cartoon Lumi
+// running along it and ONE line of status text. Order:
+//   1. Claude sign-in first (GET /api/health?part=claude). Signed out: the bar pauses on "sign in to claude" with one
+//      button (POST /api/fix/signin opens `claude auth login`), the page polls and carries on by itself. A Free plan
+//      gets a sad-faced warning (builds may stop or fail) and can carry on anyway, or use another account.
+//   2. Every other check runs hidden (GET /api/health). A failing check is fixed silently (/api/fix/npm|pip); if that
+//      fails and Claude can run, Claude headless tries (/api/fix/claude mode fix); if that fails too, Claude explains
+//      it in one or two plain sentences (mode explain). Without Claude: "something's wrong" + Repair (/api/fix/repair).
+//   A small "details" link shows the old check list; a newer version is a small tappable note, never automatic.
 // mountLoading(el, { audio, onDone(info) }) -> { destroy() }      info = { health, update: {latest, version}|null }
 import * as api from './api.js';
+import { startUpdate } from './update.js';
+import { lumiArt } from './lumi-art.js';
 
 const ORDER = ['engine', 'node', 'modules', 'edge', 'python', 'claude', 'signin', 'disk', 'version'];
 const NAMES = { engine: 'lumi files', node: 'node.js', modules: 'slide tools', edge: 'microsoft edge', python: 'export tools',
   claude: 'claude', signin: 'claude sign-in', disk: 'free space', version: 'updates' };
-const FIX_LABEL = { npm: 'install them', pip: 'install them', signin: 'sign in', update: 'update lumi', claude: 'update lumi' };
-const PREMIUM = ['pro', 'max', 'team', 'enterprise'];
-const MIN_MS = 1500;
+const SILENT = ['npm', 'pip'];                      // fixes that run quietly in the background
+const CLAUDE_CAN_FIX = ['modules', 'python', 'node'];
+const MIN_MS = 1400;
 
-function h(tag, attrs = {}, ...kids) {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v == null || v === false) continue;
-    if (k === 'class') e.className = v; else if (k === 'html') e.innerHTML = v;
-    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
-  }
-  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
-  return e;
-}
+import { h } from './dom.js';
 const ICON = {
   ok: '<svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   fail: '<svg viewBox="0 0 24 24"><path d="M12 7v6.5M12 17v.4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
-  warn: '<svg viewBox="0 0 24 24"><path d="M12 7v6.5M12 17v.4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const lowerFirst = s => { s = String(s || ''); return /^(Lumi|Claude|Microsoft|Node\.js|Python)\b/.test(s) ? s : s.replace(/^[A-Z](?=[a-z ])/, c => c.toLowerCase()); };
+const find = (hh, id) => hh && (hh.checks || []).find(c => c.id === id);
 
 export function mountLoading(el, { audio, onDone } = {}) {
   const sfx = n => { try { audio && audio.sfx && audio.sfx(n); } catch (e) { /* optional */ } };
-  let alive = true, health = null, rows = new Map(), finished = false, timers = [];
+  let alive = true, health = null, finished = false, timers = [], prog = 0, creep = 0, flowRun = 0;
   const later = (fn, ms) => { const t = setTimeout(() => { if (alive) fn(); }, ms); timers.push(t); return t; };
 
+  // ---- left: headline, the bar with Lumi running on it, one status line, "details"
   const badge = h('span', { class: 'badge ld-badge' }, h('i', { class: 'ld-pulse', 'aria-hidden': 'true' }), h('span', { class: 'ld-badge-t' }, 'getting ready'));
   const head = h('h1', { class: 'w-head ld-head' }, 'warming up', h('br'), 'the studio');
-  const list = h('ol', { class: 'ld-list', 'aria-label': 'readiness checks', 'aria-live': 'polite' });
-  const leftB = h('div', { class: 'ld-left' }, badge, head, list);
+  const runner = h('span', { class: 'ld-runner', html: lumiArt({ size: 62 }) });
+  const fill = h('i', { class: 'ld-fill' });
+  const bar = h('div', { class: 'ld-bar', role: 'progressbar', 'aria-label': 'getting ready', 'aria-valuemin': '0', 'aria-valuemax': '100' },
+    h('span', { class: 'ld-track' }, fill), runner);
+  const line = h('p', { class: 'ld-line', 'aria-live': 'polite' }, 'saying hello to claude…');
+  const detailsB = h('button', { type: 'button', class: 'link ld-details-b', 'aria-expanded': 'false' }, 'details');
+  const list = h('ol', { class: 'ld-list', 'aria-label': 'readiness checks', hidden: true });
+  const leftB = h('div', { class: 'ld-left' }, badge, head, bar, line, detailsB, list);
 
-  const sideBadge = h('span', { class: 'badge' }, 'one moment');
-  const side2 = h('h2', { class: 'w-head2 ld-h2' }, 'checking everything', h('br'), 'so claude can get to work');
-  const sideNote = h('p', { class: 'w-note ld-note' }, 'this only takes a few seconds. if something needs fixing, there’s a button for it.');
-  const premium = h('div', { class: 'ld-premium', hidden: true });
-  const update = h('div', { class: 'ld-update', hidden: true });
-  const goBtn = h('button', { type: 'button', class: 'begin ld-go', hidden: true, 'data-nosfx': '', 'data-cursor-label': 'go' },
-    h('span', { class: 'lbl' }, 'go to my decks'),
-    h('span', { class: 'begin-arrow', 'aria-hidden': 'true', html: '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' }));
-  const again = h('button', { type: 'button', class: 'soft-pill ld-again', hidden: true }, 'check again');
-  const skip = h('button', { type: 'button', class: 'link ld-skip', hidden: true }, 'carry on anyway');
-  const sideB = h('div', { class: 'ld-right' }, sideBadge, side2, sideNote, premium, update, h('div', { class: 'ld-acts' }, goBtn, again), skip);
+  // ---- right: only what needs the person (sign in, free plan, a problem, an update)
+  const card = h('div', { class: 'ld-card', hidden: true });
+  const update = h('button', { type: 'button', class: 'ld-update', hidden: true, 'data-cursor-label': 'update' });
+  const sideB = h('div', { class: 'ld-right' }, card, update);
   el.replaceChildren(leftB, sideB);
 
-  // ---- rows
-  function row(id) {
-    let r = rows.get(id);
-    if (r) return r;
-    const ico = h('span', { class: 'ld-ico', 'aria-hidden': 'true' });
-    const label = h('span', { class: 'ld-l' }, NAMES[id] || id);
-    const detail = h('span', { class: 'ld-d' }, 'checking…');
-    const fixB = h('button', { type: 'button', class: 'ld-fix', hidden: true, 'data-nosfx': '', 'data-cursor-label': 'fix' });
-    const li = h('li', { class: 'ld-row', 'data-id': id, 'data-state': 'wait' }, ico, h('span', { class: 'ld-t' }, label, detail), fixB);
-    r = { id, li, ico, label, detail, fixB, check: null, fixing: false };
-    fixB.addEventListener('click', () => runFix(r));
-    rows.set(id, r);
-    list.append(li);
-    return r;
-  }
-  function setRow(r, c, { quiet = false } = {}) {
-    r.check = c;
-    const state = c.ok ? 'ok' : c.blocking === false ? 'warn' : 'fail';
-    r.li.dataset.state = state;
-    r.ico.innerHTML = ICON[state] || '';
-    r.label.textContent = lowerFirst(c.label || NAMES[r.id]);
-    if (!r.fixing) r.detail.textContent = String(c.detail || '').replace(/^\(simulated failure\)\s*/, '(test) ');
-    const fx = !c.ok && c.fix && r.id !== 'version' ? c.fix : null;
-    r.fixB.hidden = !fx || r.fixing;
-    if (fx) r.fixB.textContent = r.id === 'signin' && isFreePlan() ? 'use another account' : FIX_LABEL[fx] || 'fix it';
-    if (!quiet) { r.li.classList.remove('ld-pop'); void r.li.offsetWidth; r.li.classList.add('ld-pop'); sfx(c.ok ? 'tick' : 'pop'); }
-  }
-  const isFreePlan = () => {
-    const p = health && health.subscriptionType;
-    const si = health && (health.checks || []).find(c => c.id === 'signin');
-    return !!(si && !si.ok && p && !PREMIUM.includes(String(p).toLowerCase()));
-  };
-  ORDER.forEach((id, i) => { const r = row(id); r.li.style.setProperty('--d', `${i * 70}ms`); });
+  detailsB.addEventListener('click', () => {
+    const open = list.hidden; list.hidden = !open; detailsB.textContent = open ? 'hide details' : 'details';
+    detailsB.setAttribute('aria-expanded', open ? 'true' : 'false'); sfx('click');
+  });
 
-  // ---- the flow
-  async function check({ reveal = true } = {}) {
-    const t0 = performance.now();
-    if (reveal) for (const r of rows.values()) { if (!r.fixing) { r.li.dataset.state = 'wait'; r.detail.textContent = 'checking…'; r.ico.innerHTML = ''; } }
-    paintSide('checking');
-    const res = await api.health();
-    if (!alive) return;
-    if (!res || !Array.isArray(res.checks)) { paintSide('offline'); return; }
-    health = res;
-    if (reveal) await sleep(Math.max(0, MIN_MS - (performance.now() - t0)));
-    const ids = ORDER.concat(res.checks.map(c => c.id).filter(id => !ORDER.includes(id)));
-    for (const id of ids) {
-      const c = res.checks.find(x => x.id === id);
-      const r = rows.get(id);
-      if (!c) { if (r) { r.li.remove(); rows.delete(id); } continue; }
-      setRow(row(id), c, { quiet: !reveal });
-      if (reveal) { await sleep(150); if (!alive) return; }
-    }
-    paintSide(res.ok ? 'ok' : 'fail');
+  // ---- the bar
+  function setProg(p, { running = true } = {}) {
+    prog = Math.max(prog, Math.min(1, p));
+    bar.style.setProperty('--p', prog.toFixed(3));
+    bar.setAttribute('aria-valuenow', String(Math.round(prog * 100)));
+    runner.classList.toggle('is-running', running && prog < 1);
+    bar.classList.toggle('is-paused', !running);
   }
-  function paintSide(state) {
-    const vc = health && (health.checks || []).find(c => c.id === 'version');
+  function creepTo(target, ms) {                     // slow fake progress while a request is out
+    clearInterval(creep);
+    const from = prog, t0 = performance.now();
+    creep = setInterval(() => {
+      if (!alive) return clearInterval(creep);
+      const k = Math.min(1, (performance.now() - t0) / ms);
+      setProg(from + (target - from) * (1 - Math.pow(1 - k, 2)));
+      if (k >= 1) clearInterval(creep);
+    }, 60);
+  }
+  const say = t => { line.textContent = t; };
+  function mood(m) { runner.innerHTML = lumiArt({ mood: m, size: 62 }); }
+  function paintHead(state, n = 0) {
+    badge.dataset.state = state;
+    const t = el.querySelector('.ld-badge-t');
+    const set = (b, a, c) => { t.textContent = b; head.replaceChildren(a, h('br'), c); };
+    if (state === 'checking') set('getting ready', 'warming up', 'the studio');
+    else if (state === 'signin') set('one step', 'first, sign in', 'to claude');
+    else if (state === 'free') set('a heads-up', 'about your', 'claude plan');
+    else if (state === 'fixing') set('one moment', 'tidying up', 'a few things');
+    else if (state === 'ok') set('all set', 'all set!', 'let’s make slides');
+    else if (state === 'offline') set('can’t reach lumi', 'hmm, the studio', 'isn’t answering');
+    else set(n > 1 ? `${n} things` : 'one thing', 'something', 'needs a hand');
+  }
+
+  // ---- the details list (the old check list, hidden by default)
+  function paintList() {
+    const checks = (health && health.checks) || [];
+    const ids = ORDER.concat(checks.map(c => c.id).filter(id => !ORDER.includes(id)));
+    list.replaceChildren(...ids.map(id => {
+      const c = checks.find(x => x.id === id);
+      if (!c) return null;
+      const state = c.ok ? 'ok' : c.blocking === false ? 'warn' : 'fail';
+      return h('li', { class: 'ld-row', 'data-id': id, 'data-state': state }, h('span', { class: 'ld-ico', 'aria-hidden': 'true', html: ICON[state === 'ok' ? 'ok' : 'fail'] }),
+        h('span', { class: 'ld-t' }, h('span', { class: 'ld-l' }, lowerFirst(c.label || NAMES[id])),
+          h('span', { class: 'ld-d' }, String(c.detail || '').replace(/^\(simulated failure\)\s*/, '(test) '))));
+    }).filter(Boolean));
+  }
+
+  // ---- the right-hand card
+  const btn = (t, cls, fn, label) => { const b = h('button', { type: 'button', class: cls, 'data-nosfx': '', 'data-cursor-label': label || 'go' }, t); b.addEventListener('click', fn); return b; };
+  function showCard({ face = null, title, text, buttons = [], extra = null }) {
+    card.replaceChildren(...[face ? h('span', { class: 'ld-face', html: lumiArt({ mood: face, size: 88 }) }) : null,
+      h('p', { class: 'ld-c-t' }, title), text ? h('p', { class: 'ld-c-x' }, text) : null,
+      buttons.length ? h('div', { class: 'ld-c-b' }, ...buttons) : null, extra].filter(Boolean));
+    card.hidden = false;
+    card.classList.remove('is-in'); void card.offsetWidth; card.classList.add('is-in');
+  }
+  const hideCard = () => { card.hidden = true; card.replaceChildren(); };
+  function paintUpdate() {
+    const vc = find(health, 'version');
     const newer = vc && !vc.ok && vc.latest;
     update.hidden = !newer;
-    if (newer) {
-      const ub = h('button', { type: 'button', class: 'ld-ubtn', 'data-cursor-label': 'update' }, 'update now');
-      ub.addEventListener('click', () => runFix(rows.get('version') || row('version'), ub));
-      update.replaceChildren(h('span', { class: 'ld-uspark', 'aria-hidden': 'true' }), h('span', { class: 'ld-ut' }, `a new version is ready (${String(vc.latest).replace(/^v/, '')})`), ub);
+    if (newer) update.replaceChildren(h('span', { class: 'ld-uspark', 'aria-hidden': 'true' }), h('span', {}, `update available (${String(vc.latest).replace(/^v/, '')})`), h('span', { class: 'ld-u-go' }, 'update'));
+  }
+  update.addEventListener('click', () => { sfx('launch'); runUpdate('update'); });
+
+  // ---- step 1: claude sign-in
+  async function signinStep(run) {
+    paintHead('checking'); say('saying hello to claude…');
+    creepTo(0.14, 2500);
+    const r = await api.health('claude');
+    if (!alive || run !== flowRun) return null;
+    if (!r || !Array.isArray(r.checks)) return 'offline';
+    const cli = find(r, 'claude'), si = find(r, 'signin');
+    if (!cli || !cli.ok) return 'no-claude';
+    if (si && si.ok) return 'ok';
+    if (si && si.free) return freeStep(run, si, r.subscriptionType);
+    return waitSignin(run);
+  }
+  function waitSignin(run, { again = false } = {}) {
+    return new Promise(resolve => {
+      paintHead('signin'); setProg(prog, { running: false }); mood('hmm');
+      say(again ? 'sign in with the account you want to use' : 'waiting for you to sign in');
+      const go = btn('sign in to claude', 'ld-primary', async () => {
+        go.disabled = true; sfx('launch');
+        const res = await api.fix('signin');
+        if (!alive || run !== flowRun) return;
+        if (!res || res.ok === false) { go.disabled = false; sfx('error'); say('the sign-in window didn’t open. try again?'); return; }
+        go.textContent = 'waiting for the sign-in…';
+        say('finish signing in in the window that opened. this page notices by itself.');
+        const t0 = Date.now();
+        let polls = 0;
+        while (alive && run === flowRun && Date.now() - t0 < 6 * 60 * 1000) {
+          await sleep(api.pace(3000, polls++, { max: 9000 }));
+          const hh = await api.health('claude');
+          if (!alive || run !== flowRun) return;
+          const si = find(hh, 'signin');
+          if (si && si.ok) { sfx('success'); hideCard(); mood('happy'); resolve('ok'); return; }
+          if (si && si.free) { hideCard(); mood('happy'); resolve(await freeStep(run, si, hh.subscriptionType)); return; }
+        }
+        go.disabled = false; go.textContent = 'sign in to claude'; say('still not signed in. press the button when you’re ready.');
+      }, 'sign in');
+      showCard({ face: 'hmm', title: 'sign in to claude', text: 'lumi uses claude to build your slides. sign in once and lumi carries on by itself.', buttons: [go] });
+    });
+  }
+  function freeStep(run, si, plan) {
+    return new Promise(resolve => {
+      paintHead('free'); setProg(prog, { running: false }); mood('sad');
+      say(`you’re on the claude ${String(plan || 'free').toLowerCase()} plan`);
+      const go = btn('continue anyway', 'ld-primary', () => { sfx('click'); hideCard(); mood('happy'); resolve('ok'); }, 'continue');
+      const other = btn('use another account', 'ld-soft', async () => {
+        other.disabled = true; sfx('click');
+        await api.claude.logout();
+        if (!alive || run !== flowRun) return;
+        hideCard(); resolve(await waitSignin(run, { again: true }));
+      }, 'switch');
+      showCard({ face: 'sad', title: 'the free plan isn’t ideal for lumi',
+        text: 'lumi runs claude code for a long time to build each deck. the free plan has very little or no claude code use, so builds may stop part-way or fail. pro, max or team works best.',
+        buttons: [go, other] });
+    });
+  }
+
+  // ---- step 2: everything else, hidden
+  const blockers = hh => ((hh && hh.checks) || []).filter(c => !c.ok && c.blocking !== false && c.id !== 'signin');
+  async function fullCheck(run) {
+    const t0 = performance.now();
+    creepTo(0.82, 3200);
+    let i = 0;
+    const names = ['lumi files', 'node.js', 'slide tools', 'microsoft edge', 'export tools', 'free space'];
+    const cycle = setInterval(() => { if (alive && run === flowRun) say(`checking ${names[i++ % names.length]}…`); }, 420);
+    say('checking lumi files…');
+    const r = await api.health();
+    clearInterval(cycle);
+    if (!alive || run !== flowRun) return null;
+    if (!r || !Array.isArray(r.checks)) return null;
+    await sleep(Math.max(0, MIN_MS - (performance.now() - t0)));
+    health = r; paintList(); paintUpdate();
+    return r;
+  }
+  async function waitFix() {
+    for (let n = 0; ; n++) {
+      await sleep(api.pace(700, n, { max: 2500 }));
+      if (!alive) return null;
+      const st = await api.fixStatus();
+      if (!alive) return null;
+      if (st && st.running) continue;
+      return st || {};
     }
-    const free = isFreePlan();
-    premium.hidden = !free;
-    if (free) {
-      const plan = String(health.subscriptionType);
-      premium.replaceChildren(h('p', { class: 'ld-p-t' }, 'lumi needs claude pro, max or team'),
-        h('p', { class: 'ld-p-x' }, `you’re signed in with a ${plan.toLowerCase()} plan, which can’t run claude in the background. upgrade at claude.ai, or sign in with an account that has a paid plan.`));
+  }
+  async function claudeHelp(c, mode, tried) {
+    const r = await api.fixClaude({ check: c.id, label: c.label, detail: c.detail, mode, tried });
+    if (!alive || !r || r.ok === false) return { ran: false, ok: false };
+    return (await waitFix()) || { ran: false };
+  }
+  async function depsStep(run) {
+    paintHead('checking'); mood('happy');
+    let r = await fullCheck(run);
+    if (!alive || run !== flowRun) return;
+    if (!r) return showOffline();
+    const claudeOk = () => { const cl = find(health, 'claude'), si = find(health, 'signin'); return !!(cl && cl.ok && si && (si.ok || si.free)); };
+    const tried = {};
+    for (let pass = 0; pass < 6; pass++) {
+      const bad = blockers(health);
+      if (!bad.length) return allSet();
+      const c = bad.find(x => !tried[x.id]);
+      if (!c) break;
+      tried[c.id] = [];
+      paintHead('fixing'); setProg(Math.max(prog, 0.84));
+      const name = NAMES[c.id] || c.id;
+      if (SILENT.includes(c.fix)) {
+        say(`fixing ${name}…`);
+        const res = await api.fix(c.fix);
+        if (!alive || run !== flowRun) return;
+        const st = res && res.ok !== false ? await waitFix() : null;
+        if (!alive || run !== flowRun) return;
+        tried[c.id].push(st && st.ok ? 'reinstalled it' : `the automatic repair failed (${(st && st.message) || (res && res.message) || 'did not start'})`);
+        r = await fullCheck(run);
+        if (!alive || run !== flowRun) return;
+        if (!r) return showOffline();
+        if ((find(health, c.id) || {}).ok) continue;
+      }
+      if (claudeOk() && CLAUDE_CAN_FIX.includes(c.id)) {
+        say(`asking claude to fix ${name}…`);
+        const st = await claudeHelp(c, 'fix', tried[c.id].join('; '));
+        if (!alive || run !== flowRun) return;
+        if (st.ran) tried[c.id].push('claude tried: ' + (st.message || ''));
+        r = await fullCheck(run);
+        if (!alive || run !== flowRun) return;
+        if (!r) return showOffline();
+        if ((find(health, c.id) || {}).ok) continue;
+      }
+      return showProblem(run, find(health, c.id) || c, claudeOk(), tried[c.id].join('; '));
     }
-    const t = el.querySelector('.ld-badge-t');
-    badge.dataset.state = state;
-    goBtn.hidden = again.hidden = skip.hidden = true;
-    if (state === 'checking') {
-      t.textContent = 'getting ready';
-      head.replaceChildren('warming up', h('br'), 'the studio');
-      sideBadge.textContent = 'one moment';
-    } else if (state === 'offline') {
-      t.textContent = 'can’t reach lumi';
-      head.replaceChildren('hmm, the studio', h('br'), 'isn’t answering');
-      sideBadge.textContent = 'try again';
-      side2.replaceChildren('lumi’s helper', h('br'), 'stopped running');
-      sideNote.textContent = 'close this window and open lumi again from your desktop.';
-      again.hidden = false;
-    } else if (state === 'ok') {
-      t.textContent = 'all set';
-      head.replaceChildren('all set!', h('br'), 'let’s make slides');
-      sideBadge.textContent = 'ready';
-      side2.replaceChildren('everything works', h('br'), 'nicely together');
-      sideNote.textContent = 'taking you to your decks…';
-      goBtn.hidden = false;
-      if (!finished) { finished = true; sfx('success'); later(() => done(), 1100); }
-    } else {
-      const n = (health.checks || []).filter(c => !c.ok && c.blocking !== false).length;
-      t.textContent = n === 1 ? '1 thing to fix' : `${n} things to fix`;
-      head.replaceChildren(n === 1 ? 'one thing' : 'a couple of', h('br'), n === 1 ? 'to sort out' : 'things to fix');
-      sideBadge.textContent = 'almost there';
-      side2.replaceChildren('press the button', h('br'), 'next to each one');
-      sideNote.textContent = free ? 'claude needs a paid plan to build slides.' : 'lumi fixes most things by itself. it can take a minute or two.';
-      again.hidden = false; skip.hidden = false;
-      sfx('error');
+    const left = blockers(health);
+    if (!left.length) return allSet();
+    return showProblem(run, left[0], claudeOk(), '');
+  }
+  async function showProblem(run, c, canAsk, tried) {
+    const n = blockers(health).length;
+    paintHead('fail', n); setProg(prog, { running: false }); mood('sad');
+    sfx('error');
+    const name = NAMES[c.id] || c.id;
+    let text = '';
+    if (canAsk) {
+      say('asking claude what went wrong…');
+      const st = await claudeHelp(c, 'explain', tried);
+      if (!alive || run !== flowRun) return;
+      if (st.ran && st.ok && st.message) text = st.message;
     }
+    say(`${name} isn’t working yet`);
+    const repairB = btn('repair lumi', 'ld-primary', () => { sfx('launch'); runUpdate('repair', repairB); }, 'repair');
+    const againB = btn('check again', 'ld-soft', () => { sfx('click'); start(); }, 'again');
+    const skipB = h('button', { type: 'button', class: 'link ld-skip' }, 'carry on anyway');
+    skipB.addEventListener('click', () => { sfx('click'); finished = true; done(); });
+    showCard({ face: 'sad', title: text ? `${name} needs a hand` : 'something’s wrong',
+      text: text || `lumi couldn’t get ${name} working by itself. repair reinstalls lumi and keeps your decks and files.`,
+      buttons: [repairB, againB], extra: skipB });
+  }
+  function showOffline() {
+    paintHead('offline'); setProg(prog, { running: false }); mood('sad');
+    say('lumi’s helper stopped running');
+    showCard({ face: 'sad', title: 'lumi isn’t answering', text: 'close this window and open lumi again from your desktop.',
+      buttons: [btn('check again', 'ld-soft', () => { sfx('click'); start(); }, 'again')] });
+  }
+  function allSet() {
+    clearInterval(creep);
+    hideCard(); paintHead('ok'); mood('happy');
+    setProg(1, { running: false });
+    say('all set. taking you to your decks…');
+    if (!finished) { finished = true; sfx('success'); later(done, 1000); }
   }
   function done() {
     if (!alive) return;
-    const vc = health && (health.checks || []).find(c => c.id === 'version');
+    const vc = find(health, 'version');
     onDone && onDone({ health, update: vc && !vc.ok && vc.latest ? { latest: vc.latest, version: vc.version } : null });
   }
 
-  // ---- fixes
-  async function runFix(r, extraBtn) {
-    const c = r.check || {}, name = c.fix || (r.id === 'version' ? 'update' : null);
-    if (!name || r.fixing) return;
-    r.fixing = true; r.fixB.hidden = true; r.li.dataset.state = 'fixing';
-    if (extraBtn) extraBtn.disabled = true;
-    sfx('launch');
-    const say = t => { r.detail.textContent = t; };
-    const res = await api.fix(name === 'claude' ? 'update' : name);
-    if (!alive) return;
-    if (!res || res.ok === false) {
-      r.fixing = false;
-      say(res && res.message ? res.message : res && res.error === 'offline' ? 'couldn’t reach lumi.' : 'that didn’t start. try again?');
-      r.li.dataset.state = 'fail'; r.fixB.hidden = false; r.fixB.textContent = 'try again';
-      if (extraBtn) extraBtn.disabled = false;
-      sfx('error');
-      return;
-    }
-    if (name === 'update' || name === 'claude') {
-      if (res.launched === false) { say('the updater would open now (test mode).'); r.li.dataset.state = 'warn'; r.fixing = false; return; }
-      say('updating lumi… this window refreshes by itself when it’s done.');
-      r.li.dataset.state = 'fixing';
-      // the updater stops this server, installs, then starts it again: wait for that, then reload in place
-      let wentDown = false;
-      const t0 = Date.now();
-      while (alive && Date.now() - t0 < 15 * 60 * 1000) {
-        await sleep(2000);
-        const up = await fetch('/api/ping', { cache: 'no-store' }).then(x => x.ok).catch(() => false);
-        if (!up) wentDown = true;
-        else if (wentDown) { sfx('success'); location.reload(); return; }
-      }
-      r.fixing = false; say('the update is taking a while. if it finished, click check again.'); r.li.dataset.state = 'warn';
-      return;
-    }
-    if (name === 'signin') {
-      say('a sign-in window opened. finish there; this page notices by itself.');
-      const t0 = Date.now();
-      while (alive && Date.now() - t0 < 6 * 60 * 1000) {
-        await sleep(3500);
-        if (!alive) return;
-        const hh = await api.health();
-        if (!alive) return;
-        const si = hh && (hh.checks || []).find(x => x.id === 'signin');
-        if (si && si.ok) { r.fixing = false; sfx('success'); health = hh; await check({ reveal: false }); return; }
-      }
-      r.fixing = false; say('still not signed in. try again when you’re ready.'); r.fixB.hidden = false; r.fixB.textContent = 'try again';
-      r.li.dataset.state = 'fail';
-      return;
-    }
-    // npm / pip: a background install with its own log
-    say('installing… this can take a minute');
-    for (;;) {
-      await sleep(800);
-      if (!alive) return;
-      const st = await api.fixStatus();
-      if (!alive) return;
-      if (st && st.running) { const last = (st.log || []).slice(-1)[0]; if (last) say('installing… ' + String(last).slice(0, 70)); continue; }
-      r.fixing = false;
-      if (st && st.ok) { sfx('success'); say('installed, checking again…'); await check({ reveal: false }); }
-      else { sfx('error'); say((st && st.message) || 'that didn’t finish. try again?'); r.li.dataset.state = 'fail'; r.fixB.hidden = false; r.fixB.textContent = 'try again'; }
-      return;
-    }
+  // ---- update / repair: the launcher stops this server, installs, starts it again; then reload in place
+  const runUpdate = (name, b) => startUpdate(name, { say, sfx, alive: () => alive, button: b });
+
+  // ---- the flow
+  async function start() {
+    const run = ++flowRun;
+    finished = false; hideCard(); clearInterval(creep);
+    prog = 0; setProg(0); health = null;
+    const s1 = await signinStep(run);
+    if (!alive || run !== flowRun || s1 == null) return;
+    if (s1 === 'offline') return showOffline();
+    if (s1 === 'ok') { sfx('tick'); setProg(Math.max(prog, 0.2)); }
+    await depsStep(run);
   }
+  start();
 
-  goBtn.addEventListener('click', () => { finished = true; done(); });
-  again.addEventListener('click', () => { sfx('click'); check(); });
-  skip.addEventListener('click', () => { sfx('click'); done(); });
-  check();
-
-  return { destroy() { alive = false; timers.forEach(clearTimeout); el.replaceChildren(); } };
+  return { destroy() { alive = false; flowRun++; clearInterval(creep); timers.forEach(clearTimeout); el.replaceChildren(); } };
 }

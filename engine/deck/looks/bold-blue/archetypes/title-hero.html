@@ -1,0 +1,47 @@
+<!-- STAGING NOTE: the placeholder below (a neutral blob and ring) is NOT a design. Decide what the subject really is (LOOK.md 4.0) and show it in its own setting; use floor: 'none' / sky: true / cyc: true as the subject needs. No wooden base, gauge or vial unless the subject is that. -->
+<!-- archetype: title-hero | the title over a full-bleed studio render of the subject | main visual: 3D | companions: kicker with the orange dot, names (meta) -->
+<section class="slide bb-title-bg" data-kind="title" data-minutes="0.75" data-title="Title">
+    <div class="aura-3d bb-full" data-scene="s{{N}}-hero" data-period="20" aria-hidden="true"></div>
+    <div class="safe">
+      <div class="bb-hero">
+        <p class="kicker dot" data-edit="s{{N}}-1">Course · Institution</p>
+        <h1 class="title" data-edit="s{{N}}-2">A clear title that says what the talk is about</h1>
+        <ul class="bb-meta">
+          <li data-edit="s{{N}}-3"><span class="lb">Presented by</span><b>Presenter Name</b></li>
+          <li data-edit="s{{N}}-4"><span class="lb">For</span><b>Course or event</b><br>Institution</li>
+        </ul>
+      </div>
+      <footer class="bb-foot"><span class="bb-mark" data-edit="s{{N}}-5">Deck mark</span><span class="bb-pageno"></span></footer>
+    </div>
+    <aside class="notes" data-aura-notes>
+      <p>Open by naming the object on screen, not the theory behind it. Say what it is in one plain sentence, then say why
+      this room should care about it today.</p>
+      <p>Point at the model: tell them it is built from the real geometry and that the motion they see is the behaviour
+      this talk explains.</p>
+      <p>Frame the talk in three beats: why it matters, how it works, what we found. If asked about the model, say it is
+      a schematic render, not a photograph.</p>
+    </aside>
+  </section>
+
+<script>
+/* ---- slide 1: hero object on the studio floor. The blob and ring are a NEUTRAL placeholder: replace them with the real subject
+   in its own setting (LOOK.md 4.0). No wooden base, gauge, vial or stand unless the subject is that. ---- */
+Aura.scene('s{{N}}-hero', (ctx) => {
+  const { THREE } = ctx;
+  // the photo cyclorama preset (measured from the reference title render): long lens, frame shifted so the object
+  // sits in the right half, clear of the title
+  const S = BB3D.studio(ctx, { cyc: true, target: [0, 1.4, 0], distance: 16 });
+  const M = BB3D.materials(THREE);
+  const g = new THREE.Group();
+  const core = BB3D.blob(THREE, { radius: 0.95, seed: 3 }, M.soft); core.position.y = 1.2; g.add(core);   // neutral placeholder: replace with the subject
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.06, 24, 96), M.copper); ring.rotation.x = Math.PI / 2; ring.position.y = 1.2; ring.scale.setScalar(1.5); g.add(ring);
+  g.add(BB3D.contactShadow(THREE, 4.2, 3, { opacity: 0.45 }));
+  S.add(g);
+  return S.api({ update(t) {
+    const w = BBTime.phase(t, ctx.period);          // every motion uses whole harmonics of the period: seamless loop
+    S.orbit(t);
+    core.rotation.y = w;
+    core.position.y = 1.2 + 0.06 * Math.sin(2 * w);
+  } });
+}, { period: 20 });
+</script>

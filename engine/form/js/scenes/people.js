@@ -8,7 +8,7 @@ import { C, h, get, clean, currentScreen, short, textWidth, star, pill, makeStag
 const BODIES = [C.p1, C.f5, C.or, C.f4, C.p2, C.lilac, C.f3, C.or2];
 const HEADS = [C.f1, C.f2, C.f1, C.f2];
 
-// "S. M. Shafayat Islam" -> "Shafayat Islam" (drops initials and short honorifics for the name tag).
+// "A. B. Doe" -> "Doe" (drops initials and short honorifics for the name tag).
 function display(name) {
   const words = clean(name).split(' ').filter(Boolean);
   const kept = words.filter(w => !/^[A-Za-z]{1,3}\.$/.test(w) && !/^[A-Za-z]$/.test(w));
@@ -90,7 +90,7 @@ export default {
     const backRow = h('g'), frontRow = h('g');
     team.append(backRow, frontRow);
     mid.append(team);
-    const countP = pill({ x: 34, y: 62, ht: 26, pad: 11, size: 13, fill: C.ink, color: C.pill, max: 220 });
+    const countP = pill({ x: 34, y: 62, ht: 26, pad: 11, size: 13, fill: '#5b3fa8', color: C.pill, max: 220 });
     mid.append(countP.g);
 
     // ---- front: the supervisor, the pennant

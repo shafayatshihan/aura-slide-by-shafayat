@@ -1,4 +1,40 @@
 /* Lumi deck runtime (classic script, no dependencies).
+
+   ==================================================================================================================
+   CAPTURE CONTRACT (shared with the finalize recorder; keep it exactly as written here)
+   ------------------------------------------------------------------------------------------------------------------
+   1. Registration. Every animated piece declares its loop period in seconds when it is defined:
+        Aura.scene('id', setup, { period: 12 })      or  <div class="aura-3d" data-scene="id" data-period="12">
+        Aura.canvas('id', setup, { period: 6 })      (2D canvas loops work the same way)
+      period 0 means "still": the scene does not move and one frame is enough. A scene must be periodic:
+      update(t + period) draws exactly what update(t) draws (closed-form functions of t, or BBPhys.loop for
+      simulations). update(t) never depends on wall-clock time, Math.random() or the previous frame.
+   2. ?capture. The deck sets
+        window.LumiCapture = { ready: Promise, slides: { <1-based n>: { period, seek: async t => {}, rect, holder } } }
+      ready resolves (to the same object) once fonts are loaded and every slide is registered. Every slide holding an
+      .aura-3d / .aura-canvas piece with a period gets an entry (the slide's period is the longest of its pieces).
+      seek(t) makes slide n current (no entrance motion, no chrome, slide at scale 1 at the window's top-left), renders
+      a deterministic frame of every piece on that slide at time t (t is NOT wrapped: the scene's own periodicity makes
+      seek(0) and seek(period) identical), poses CSS animations inside the holder at t, and resolves once the frame is
+      on screen. rect = { x, y, w, h }: the main holder in slide pixels (1920 x 1080), the region to record.
+      While seeking, the slide's other content is visibility:hidden (layout unchanged), so slide TEXT is never baked
+      into the video, even when the holder is full-bleed; it stays live HTML over the video. Kept visible: the holders,
+      decorative backgrounds behind them (.bb-grid-bg, .bb-bg, .bb-blobs, [data-capture="keep"]) and the projected
+      labels, which live INSIDE the holder and are deliberately BAKED into the picture (in a recorded deck the scene
+      does not run, so live labels could not follow their anchors). DOM outside the holder that follows the scene
+      (Aura.sync) stays live and follows the video's clock. Decorative background loops are frozen on slides that
+      play a recorded loop, so they cannot drift against the copy baked into the video.
+   3. Loops. If the HTML contains
+        <script type="text/plain" id="lumi-loop-<n>" data-mime="video/mp4" data-period="12">BASE64</script>
+      slide n plays that video (Blob URL, muted, loop, playsinline, only while the slide is current) inside its main
+      holder ([data-loop-target], else the first .aura-3d / .aura-canvas) in place of the live scene, and never
+      starts the live scene. The holder's other children (projected labels) are hidden: the video already shows them.
+      ?live ignores the loops and runs WebGL; ?capture always runs the live scenes.
+   4. Still frames. ?still=<n> shows slide n alone, frozen at t = period x 0.35 (data-still on a holder overrides; a
+      loop video is sought to the same time), no chrome, no entrance motion, and sets <html data-aura-still-ready="1">
+      when the frame is drawn. ?aura=all (PDF / check) uses the same still time for every piece.
+   ==================================================================================================================
+
    Load it in <head>; slides are <section class="slide"> inside <main class="deck">.
    Modes (URL): normal | ?aura=all (every slide stacked, final states: print, PDF, checks)
                 | ?aura=still (normal navigation, no motion) | ?aura=presenter (notes view, used by the P window)
@@ -8,6 +44,8 @@
    {aura:'go', index (0-based)}.
    API: Aura.scene(id, setup)  - lazy three.js scene for <div class="aura-3d" data-scene="id">
         Aura.canvas(id, setup) - lazy 2D canvas loop for <div class="aura-canvas" data-canvas="id">
+        Aura.sync(id, fn)      - fn(t) on every frame of scene / canvas `id` (live, capture, still, and recorded loops):
+                                 DOM outside the holder (a checklist, a map) that follows the scene's clock
         Aura.go(n), Aura.next(), Aura.prev(), Aura.slides(), Aura.ready (Promise), Aura.on(type, fn)
    Runtime chrome is marked data-aura-ui and never shows text below 26 px. */
 (function () {
@@ -22,14 +60,21 @@
   const EDIT = mode === 'edit';
   const EMBEDDED = (() => { try { return window.parent && window.parent !== window; } catch (e) { return true; } })();
   const reduceMQ = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
-  const STILL = ALL || mode === 'still' || reduceMQ.matches;
+  const CAPTURE = params.has('capture');
+  const STILL_N = parseInt(params.get('still') || '', 10) || 0;
+  const LIVE = params.has('live') || CAPTURE;
+  const STILL = ALL || mode === 'still' || !!STILL_N || reduceMQ.matches;
+  const FROZEN = CAPTURE || !!STILL_N;      // driven by a tool: no chrome, no input, slide at scale 1
   const W = 1920, H = 1080, MAX_LIVE_3D = 3;
 
   if (ALL) html.classList.add('aura-all');
   if (STILL) html.classList.add('aura-still');
   if (EDIT) html.classList.add('aura-edit');
+  if (FROZEN) html.classList.add('aura-still', 'aura-capture');
 
-  const sceneDefs = new Map(), canvasDefs = new Map(), listeners = {};
+  const sceneDefs = new Map(), canvasDefs = new Map(), sceneOpts = new Map(), listeners = {};
+  const loops = new Map();       // slide number -> { el, holder, mime, period, url, video }
+  const syncDefs = new Map();    // scene / canvas id -> fn(t): DOM outside the holder that follows the scene's clock
   let slides = [], current = -1, deckEl = null, presenter = PRESENTER_WINDOW, peer = null;
   let readyResolve; const ready = new Promise(r => { readyResolve = r; });
 
@@ -61,6 +106,12 @@
   let scale = 1;
   function fit() {
     if (ALL || !deckEl) return;
+    if (FROZEN) {
+      scale = 1;
+      deckEl.style.setProperty('--aura-scale', 1); deckEl.style.setProperty('--aura-x', '0px'); deckEl.style.setProperty('--aura-y', '0px');
+      live3d.forEach(r => sizeRenderer(r));
+      return;
+    }
     const panel = presenter ? Math.max(360, innerWidth * 0.34) : 0;
     const w = Math.max(1, innerWidth - panel), h = Math.max(1, innerHeight);
     scale = Math.min(w / W, h / H);
@@ -87,31 +138,41 @@
   function sizeRenderer(rec) {
     if (!rec.renderer) return;
     const { w, h } = holderSize(rec.el);
-    const pr = ALL ? 1 : Math.min(1.5, Math.max(0.5, (window.devicePixelRatio || 1) * scale));
+    const pr = ALL ? 1 : FROZEN ? (window.devicePixelRatio || 1) : Math.min(1.5, Math.max(0.5, (window.devicePixelRatio || 1) * scale));
     rec.renderer.setPixelRatio(pr);
     rec.renderer.setSize(w, h, false);
     if (rec.camera && rec.camera.isPerspectiveCamera) { rec.camera.aspect = w / h; rec.camera.updateProjectionMatrix(); }
     if (rec.api && rec.api.resize) rec.api.resize(w, h);
   }
 
-  async function ensure3d(el) {
-    if (el._aura) return el._aura;
+  // one setup per holder, even when two callers ask at once (a slide entry and a still / capture frame): both await it
+  function ensure3d(el) {
+    if (el._aura && !el._aura.pending) return Promise.resolve(el._aura.failed ? null : el._aura);
+    if (el._auraP) return el._auraP;
+    const p = setup3d(el);
+    el._auraP = p;
+    p.then(() => { if (el._auraP === p) el._auraP = null; });
+    return p;
+  }
+  async function setup3d(el) {
     const id = el.dataset.scene, setup = sceneDefs.get(id);
     if (!setup) return null;
-    const rec = { el, kind: '3d', t0: 0, used: performance.now() };
+    const rec = { el, kind: '3d', t0: 0, used: performance.now(), pending: true };
     el._aura = rec;
     try {
       const THREE = await loadThree();
       const canvas = document.createElement('canvas');
       el.appendChild(canvas);
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: ALL, powerPreference: 'default' });
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: ALL || FROZEN, powerPreference: 'default' });
       if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
       rec.renderer = renderer; rec.canvas = canvas;
       const { w, h } = holderSize(el);
-      const api = (await setup({ THREE, el, canvas, renderer, width: w, height: h, still: STILL, reducedMotion: reduceMQ.matches })) || {};
+      const api = (await setup({ THREE, el, canvas, renderer, width: w, height: h, still: STILL, reducedMotion: reduceMQ.matches,
+        period: periodOf(el), capture: FROZEN })) || {};
       rec.api = api; rec.scene = api.scene; rec.camera = api.camera;
       live3d.add(rec);
       sizeRenderer(rec);
+      rec.pending = false;
       return rec;
     } catch (err) {
       console.warn('Aura 3D scene "' + id + '" could not start:', err && err.message ? err.message : err);
@@ -124,7 +185,9 @@
   function render3d(rec, t, dt) {
     if (!rec || !rec.renderer) return;
     if (rec.api.update) rec.api.update(t, dt);
-    if (rec.scene && rec.camera) rec.renderer.render(rec.scene, rec.camera);
+    if (rec.api.render) rec.api.render(t, dt);               // post-processing pipelines draw the frame themselves
+    else if (rec.scene && rec.camera) rec.renderer.render(rec.scene, rec.camera);
+    runSync(rec.el, t);
   }
   function dispose3d(rec) {
     if (!rec) return;
@@ -159,20 +222,34 @@
     el.appendChild(canvas);
     const ctx = canvas.getContext('2d'); ctx.scale(pr, pr);
     const rec = { el, kind: '2d', canvas, ctx, t0: 0 };
-    try { rec.api = setup({ el, canvas, ctx, width: w, height: h, still: STILL, reducedMotion: reduceMQ.matches }) || {}; }
+    try { rec.api = setup({ el, canvas, ctx, width: w, height: h, still: STILL, reducedMotion: reduceMQ.matches, period: periodOf(el), capture: FROZEN }) || {}; }
     catch (e) { console.warn('Aura canvas "' + el.dataset.canvas + '" failed:', e); rec.api = {}; }
     if (typeof rec.api === 'function') rec.api = { update: rec.api };
     el._aura = rec;
     return rec;
   }
-  function stillTime(el) { const v = parseFloat(el.dataset.still); return isFinite(v) ? v : 1.5; }
+  // the loop period a piece declared: data-period on the holder, else the options given to Aura.scene / Aura.canvas
+  function periodOf(el) {
+    const v = parseFloat(el.dataset.period);
+    if (isFinite(v)) return v;
+    const o = sceneOpts.get((el.classList.contains('aura-3d') ? '3d:' : '2d:') + (el.dataset.scene || el.dataset.canvas));
+    return o && isFinite(o.period) ? +o.period : null;
+  }
+  function runSync(el, t) {
+    const fn = syncDefs.get(el.dataset.scene || el.dataset.canvas);
+    if (fn) { try { fn(t); } catch (e) { console.error(e); } }
+  }
+  function stillTime(el) {
+    const v = parseFloat(el.dataset.still); if (isFinite(v)) return v;
+    const p = periodOf(el); return p ? p * 0.35 : (p === 0 ? 0 : 1.5);
+  }
 
   function tick(now) {
     raf = 0;
     const dt = Math.min(0.1, last ? (now - last) / 1000 : 0.016); last = now;
     running.forEach(rec => {
       const t = (now - rec.t0) / 1000;
-      try { if (rec.kind === '3d') render3d(rec, t, dt); else if (rec.api.update) rec.api.update(t, dt); }
+      try { if (rec.kind === '3d') render3d(rec, t, dt); else if (rec.api.update) { rec.api.update(t, dt); runSync(rec.el, t); } }
       catch (e) { console.error(e); running.delete(rec); }
     });
     if (running.size && !document.hidden) raf = requestAnimationFrame(tick);
@@ -181,6 +258,9 @@
 
   async function startPieces(slide) {
     const token = slide;
+    const loop = !LIVE && loops.get(slides.indexOf(slide) + 1);
+    if (loop) { playLoop(loop); return; }        // a recorded loop replaces the live scene on this slide
+    if (CAPTURE) return;                         // the recorder draws every frame through LumiCapture.seek
     const pieces = slide.querySelectorAll('.aura-3d[data-scene], .aura-canvas[data-canvas]');
     for (const el of pieces) {
       const rec = el.classList.contains('aura-3d') ? await ensure3d(el) : ensureCanvas(el);
@@ -198,6 +278,129 @@
   }
   function stopPieces(slide) {
     running.forEach(rec => { if (slide.contains(rec.el)) running.delete(rec); });
+    const loop = loops.get(slides.indexOf(slide) + 1);
+    if (loop && loop.video) loop.video.pause();
+  }
+
+  /* ---------------- recorded loops (finalized decks) ---------------- */
+  function holderOf(slide) {
+    return slide.querySelector('[data-loop-target]') || slide.querySelector('.aura-3d[data-scene], .aura-canvas[data-canvas]');
+  }
+  function loopVideo(loop) {
+    if (loop.video) return loop.video;
+    if (!loop.url) {
+      const bin = atob(loop.el.textContent.replace(/\s+/g, '')), u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      loop.url = URL.createObjectURL(new Blob([u8], { type: loop.mime }));
+    }
+    const v = document.createElement('video');
+    v.className = 'aura-loop'; v.muted = true; v.defaultMuted = true; v.loop = true; v.playsInline = true; v.preload = 'auto';
+    ['muted', 'playsinline', 'disablepictureinpicture'].forEach(a => v.setAttribute(a, ''));
+    v.setAttribute('aria-hidden', 'true');
+    v.src = loop.url;
+    loop.holder.classList.add('aura-looping');
+    loop.holder.appendChild(v);
+    loop.video = v;
+    return v;
+  }
+  function playLoop(loop) {
+    const v = loopVideo(loop);
+    if (STILL) return;
+    try { v.currentTime = 0; } catch (e) { /* not loaded yet */ }
+    const p = v.play(); if (p && p.catch) p.catch(() => {});
+    // DOM that follows the scene clock (Aura.sync) keeps following the video
+    const id = loop.holder.dataset.scene || loop.holder.dataset.canvas;
+    if (syncDefs.has(id)) {
+      const step = () => { if (v.paused) return; runSync(loop.holder, v.currentTime); requestAnimationFrame(step); };
+      v.addEventListener('playing', () => requestAnimationFrame(step), { once: true });
+    }
+  }
+  function seekVideo(v, t) {
+    return new Promise(ok => {
+      const go2 = () => {
+        const d = isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+        const tt = d ? Math.min(Math.max(0, t), d - 0.001) : t;
+        v.addEventListener('seeked', () => ok(), { once: true });
+        try { v.currentTime = tt; } catch (e) { ok(); }
+      };
+      if (v.readyState >= 1) go2(); else v.addEventListener('loadedmetadata', go2, { once: true });
+      setTimeout(ok, 5000);
+    });
+  }
+  function scanLoops() {
+    document.querySelectorAll('script[type="text/plain"][id^="lumi-loop-"]').forEach(el => {
+      const n = parseInt(el.id.slice(10), 10), slide = slides[n - 1];
+      const holder = slide && holderOf(slide);
+      if (!holder) return;
+      const p = parseFloat(el.dataset.period);
+      if (!LIVE) slide.classList.add('aura-has-loop');
+      loops.set(n, { el, holder, mime: el.dataset.mime || 'video/mp4', period: isFinite(p) ? p : null, url: null, video: null });
+    });
+  }
+
+  /* ---------------- capture (?capture) and still frames (?still=n) ---------------- */
+  const nextFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  function poseCss(root, t) {
+    if (!root.getAnimations) return;
+    root.getAnimations({ subtree: true }).forEach(a => { try { a.pause(); a.currentTime = t * 1000; } catch (e) { /* ignore */ } });
+  }
+  async function renderSlideAt(slide, t, still) {
+    for (const el of slide.querySelectorAll('.aura-3d[data-scene], .aura-canvas[data-canvas]')) {
+      const rec = el.classList.contains('aura-3d') ? await ensure3d(el) : ensureCanvas(el);
+      if (!rec || rec.failed) continue;
+      running.delete(rec);
+      if (rec.kind === '3d') sizeRenderer(rec);
+      const tt = still ? stillTime(el) : t;
+      if (rec.kind === '3d') render3d(rec, tt, 0); else if (rec.api.update) { rec.api.update(tt, 0); runSync(el, tt); }
+      poseCss(el, tt);
+    }
+  }
+  // while a slide is recorded, everything on it except the 3D / canvas holders (and their projected labels) and the
+  // decorative backgrounds behind them is visibility:hidden - layout and framing do not move, but slide text never gets
+  // baked into the loop video (it stays live HTML over the video in the finalized deck)
+  const REC_KEEP = '.aura-3d[data-scene], .aura-canvas[data-canvas], [data-capture="keep"], .bb-grid-bg, .bb-bg, .bb-blobs';
+  function markRecording(slide) {
+    slides.forEach(x => { if (x !== slide) x.classList.remove('aura-rec'); });
+    slide.classList.add('aura-rec');
+    slide.querySelectorAll(REC_KEEP).forEach(el => el.setAttribute('data-aura-rec-keep', ''));
+  }
+  function buildCapture() {
+    const out = { ready: null, slides: {} };
+    slides.forEach((s, i) => {
+      const holder = holderOf(s);
+      if (!holder) return;
+      const ps = Array.from(s.querySelectorAll('.aura-3d[data-scene], .aura-canvas[data-canvas]')).map(periodOf).filter(p => p !== null);
+      if (!ps.length) return;
+      out.slides[i + 1] = {
+        period: Math.max(...ps), holder,
+        get rect() {
+          const sr = s.getBoundingClientRect(), r = holder.getBoundingClientRect();
+          return { x: Math.round(r.left - sr.left), y: Math.round(r.top - sr.top), w: Math.round(r.width), h: Math.round(r.height) };
+        },
+        async seek(t) {
+          if (current !== i) go(i, { force: true, noHash: true, fromPeer: true });
+          s.classList.remove('is-entering');
+          markRecording(s);
+          await renderSlideAt(s, +t || 0, false);
+          await nextFrame();
+        }
+      };
+    });
+    return out;
+  }
+  async function showStill(n) {
+    const s = slides[n - 1]; if (!s) return;
+    go(n - 1, { force: true, noHash: true, fromPeer: true });
+    s.classList.remove('is-entering');
+    const loop = !LIVE && loops.get(n);
+    if (loop) {
+      const v = loopVideo(loop);
+      const t = (loop.period || (isFinite(v.duration) ? v.duration : 1)) * 0.35;
+      await seekVideo(v, t);
+      runSync(loop.holder, t);
+    } else await renderSlideAt(s, 0, true);
+    await nextFrame();
+    html.dataset.auraStillReady = '1';
   }
 
   // all-slides mode: render each 3D scene once at its still time, keep it as a picture, free the GPU context
@@ -374,6 +577,27 @@
     idle = setTimeout(() => { html.classList.remove('aura-show-ui'); if (document.fullscreenElement) html.classList.add('aura-hide-cursor'); }, 2400);
   }
 
+  /* ---------------- D-02: a browser that cannot run the live 3D ---------------- */
+  // The editable deck needs Chrome or Edge (three.js is inlined as a data: module in an import map). A finalized deck plays
+  // baked loops instead and needs neither, so the notice only shows when a 3D slide has no loop to play. Presenters get a plain
+  // message and the way out (the PDF that Finalize makes), never a silent blank scene.
+  function browserNotice(force) {
+    const ua = navigator.userAgent || '';
+    const chromium = !!(window.chrome || /(Chrome|Chromium|Edg|CriOS)\//.test(ua)) && !/Firefox\/|FxiOS/.test(ua);
+    const maps = !(window.HTMLScriptElement && HTMLScriptElement.supports) || HTMLScriptElement.supports('importmap');
+    if (chromium && maps && !force) return;
+    const live = Array.from(document.querySelectorAll('.aura-3d[data-scene]')).filter(h => {
+      const sl = h.closest('.slide'), n = slides.indexOf(sl) + 1; return !loops.has(n); });
+    if (!live.length && !force) return;
+    if (document.querySelector('.aura-browser-note')) return;
+    const b = document.createElement('div');
+    b.className = 'aura-ui aura-browser-note'; b.setAttribute('data-aura-ui', ''); b.setAttribute('role', 'alert');
+    b.innerHTML = '<b>This browser may not show the 3D scenes.</b> Open this file in Microsoft Edge or Google Chrome, or present from the PDF copy that came with it.' +
+      ' <button type="button">OK</button>';
+    b.querySelector('button').addEventListener('click', () => b.remove());
+    document.body.appendChild(b);
+  }
+
   /* ---------------- start ---------------- */
   function init() {
     deckEl = document.querySelector('.deck') || document.body;
@@ -385,6 +609,23 @@
       s.querySelectorAll('[data-delay]').forEach(el => el.style.setProperty('--d', (parseFloat(el.dataset.delay) || 0) + 'ms'));
     });
     const finish = () => { html.dataset.auraReady = '1'; readyResolve(info()); emit('ready', info()); };
+    scanLoops();
+    if (!FROZEN) browserNotice();
+    if (FROZEN) {
+      fit();
+      addEventListener('resize', fit);
+      const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
+      if (CAPTURE) {
+        const cap = buildCapture();
+        cap.ready = fontsReady.then(() => cap, () => cap);
+        window.LumiCapture = cap;
+        go(0, { force: true, noHash: true, fromPeer: true });
+        fontsReady.then(finish, finish);
+      } else {
+        fontsReady.then(() => showStill(STILL_N)).then(finish, finish);
+      }
+      return;
+    }
     if (ALL) {
       Promise.all([document.fonts ? document.fonts.ready : null, renderStills()]).then(finish, finish);
       return;
@@ -407,9 +648,13 @@
   }
 
   window.Aura = {
-    version: '0.3.0', mode: ALL ? 'all' : (PRESENTER_WINDOW ? 'presenter' : (EDIT ? 'edit' : (STILL ? 'still' : 'normal'))), ready,
-    scene(id, setup) { sceneDefs.set(id, setup); },
-    canvas(id, setup) { canvasDefs.set(id, setup); },
+    version: '0.5.0', mode: CAPTURE ? 'capture' : STILL_N ? 'still-frame' : ALL ? 'all' : (PRESENTER_WINDOW ? 'presenter' : (EDIT ? 'edit' : (STILL ? 'still' : 'normal'))), ready,
+    scene(id, setup, opts) { sceneDefs.set(id, setup); if (opts) sceneOpts.set('3d:' + id, opts); },
+    sceneSource: id => { const f = sceneDefs.get(id); return f ? String(f) : ''; },       // the checker reads a scene's code (banned props)
+    browserNotice,
+    canvas(id, setup, opts) { canvasDefs.set(id, setup); if (opts) sceneOpts.set('2d:' + id, opts); },
+    period: el => periodOf(el),
+    sync(id, fn) { syncDefs.set(id, fn); },
     go: n => go(n - 1), next: () => next(), prev: () => prev(),
     current: () => current + 1, slides: info,
     on(type, fn) { (listeners[type] = listeners[type] || []).push(fn); return () => { listeners[type] = listeners[type].filter(f => f !== fn); }; }

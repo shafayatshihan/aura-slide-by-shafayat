@@ -22,6 +22,19 @@ const K = 320, C = 2 * Math.sqrt(K) * 0.8;   // ring spring: stiffness and dampi
 
 let active = null;
 
+// F-15: the custom pointer can be switched off (home screen: "use the normal mouse pointer", remembered here), it is off with
+// forced-colors / high-contrast, and ?cursor=native turns it off for one visit. If it ever fails to paint, the native pointer
+// comes back by itself (guard below). Text fields always keep the native I-beam and caret (cursor.css).
+const PREF = 'aura-pointer';
+export const nativePointer = () => {
+  try { if (localStorage.getItem(PREF) === 'native' || new URLSearchParams(location.search).get('cursor') === 'native') return true; } catch (e) { /* storage blocked */ }
+  return matchMedia('(forced-colors: active)').matches;
+};
+export function setNativePointer(on) {
+  try { if (on) localStorage.setItem(PREF, 'native'); else localStorage.removeItem(PREF); } catch (e) { /* storage blocked */ }
+  if (active) active.refresh();
+}
+
 export function initCursor() {
   if (active) return active;
   const doc = document.documentElement;
@@ -92,7 +105,7 @@ export function initCursor() {
     dot.style.transform = `translate3d(${x}px,${y}px,0)`;
     if (!seen || still.matches) snapRing();
     else if (!raf) raf = requestAnimationFrame(step);
-    if (!seen) { seen = true; doc.classList.add('aura-cursor-on'); }
+    if (!seen) { seen = true; doc.classList.add('aura-cursor-on'); later(guard, 800); }
     root.classList.add('is-on');
     if (root.classList.contains('has-label')) fit();
   }
@@ -192,8 +205,15 @@ export function initCursor() {
 
   function onStep() { requestAnimationFrame(recheck); later(recheck, 450); later(recheck, 900); }
 
+  // if the custom pointer is not actually on screen shortly after it took over, give the person their own pointer back
+  function guard() {
+    if (!seen) return;
+    const gone = !root.isConnected || getComputedStyle(root).display === 'none' || getComputedStyle(root).visibility === 'hidden';
+    if (gone) { enabled = false; seen = false; doc.classList.remove('aura-cursor-on'); }
+  }
+
   function setEnabled() {
-    enabled = fine.matches;
+    enabled = fine.matches && !nativePointer();
     if (enabled) return;
     root.classList.remove('is-on', 'is-press');
     doc.classList.remove('aura-cursor-on');
@@ -217,6 +237,7 @@ export function initCursor() {
   raise();
 
   active = {
+    refresh() { setEnabled(); },
     setState(name, text) {
       if (name === 'press') return pulse();
       forced = FORCED.has(name) ? name : null;

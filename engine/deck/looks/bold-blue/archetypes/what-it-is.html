@@ -1,0 +1,45 @@
+<!-- archetype: what-it-is | three facts + the object in 3D with projected tags | main visual: 3D | companions: <=3 facts, 2-4 projected tags -->
+<section class="slide bb-blueprint-bg" data-kind="content" data-minutes="1.5" data-title="What it is">
+  <div class="bb-grid-bg" aria-hidden="true"></div>
+  <div class="safe">
+    <div class="bb-main">
+      <div class="bb-l w5">
+        <p class="kicker" data-edit="s{{N}}-1">02 · What it is</p>
+        <h2 class="headline" data-edit="s{{N}}-2">A plain noun phrase, <span class="em">what sets it apart</span></h2>
+        <ul class="bb-stats">
+          <li><div class="bb-stat md" data-edit="s{{N}}-3">0 moving parts</div><p data-edit="s{{N}}-4">the key fact in five words</p></li>
+          <li><div class="bb-stat md" data-edit="s{{N}}-5"><span data-bb-count>45</span>&nbsp;% filled</div><div class="bb-bar" style="--v:45%"><i></i></div><p data-edit="s{{N}}-6">a number worth a bar</p></li>
+          <li><div class="bb-stat md" data-edit="s{{N}}-7">3 parts, 1 whole</div><p data-edit="s{{N}}-8">how the parts fit</p></li>
+        </ul>
+      </div>
+      <div class="bb-r w7">
+        <div class="bb-stage">
+          <div class="aura-3d bb-3d" data-scene="s{{N}}-scene" data-period="18" role="img" aria-label="Describe the 3D picture in one sentence.">
+            <div class="bb-tag cold" data-follow="a" data-align="right"><b data-edit="s{{N}}-9">Part A</b><span data-edit="s{{N}}-10">what it does</span></div>
+            <div class="bb-tag" data-follow="b" data-align="left"><b data-edit="s{{N}}-11">Part B</b><span data-edit="s{{N}}-12">what it does</span></div>
+            <div class="bb-tag hot" data-follow="c" data-align="left"><b data-edit="s{{N}}-13">Part C</b><span data-edit="s{{N}}-14">what it does</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="bb-foot"><span class="bb-mark" data-edit="s{{N}}-15">Deck mark</span><span class="bb-pageno"></span></footer>
+  </div>
+  <aside class="notes" data-aura-notes>
+    <p>Fix the object in the room before the mechanism: say what it is made of and how big it really is.</p>
+    <p><strong>Walk the tags in order.</strong> Point at each part as you name it and say what it does in one sentence.</p>
+    <p>If asked about scale, give the real dimensions; the model is drawn to be clear, not to scale.</p>
+  </aside>
+</section>
+<script>
+Aura.scene('s{{N}}-scene', (ctx) => {
+  const { THREE } = ctx, P = ctx.period;
+  const S = BB3D.studio(ctx, { target: [0, 1.4, 0], distance: 10, azimuth: -26, elevation: 14 });
+  const M = BB3D.materials(THREE);
+  const a = BB3D.lathe(THREE, [[0, 0], [0.7, 0], [0.7, 0.6], [0.5, 0.8], [0, 0.8]], M.steel); a.position.set(-1.4, 0, 0);
+  const b = BB3D.blob(THREE, { radius: 0.7, seed: 2 }, M.soft); b.position.set(0.2, 1.6, 0);
+  const c = BB3D.tube(THREE, [[1.6, 0.1, 0], [1.6, 1.2, 0.3], [1.1, 2.4, 0]], 0.08, M.copper);
+  S.add(a, b, c);
+  BB3D.labels(S, ctx.el, { a: [-1.4, 0.9, 0], b: [0.9, 2.2, 0], c: [1.6, 1.2, 0.3] });
+  return S.api({ update(t) { const w = BBTime.phase(t, P); S.orbit(t); b.rotation.y = w; b.position.y = 1.6 + 0.08 * Math.sin(2 * w); } });
+}, { period: 18 });
+</script>

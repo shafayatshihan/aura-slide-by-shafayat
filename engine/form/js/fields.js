@@ -8,52 +8,41 @@ import { AMOUNT_LABELS, amountLabel } from './steps.js';
 const svg = inner => `<svg viewBox="0 0 40 40" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2"
   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${inner}</svg>`;
 export const ICONS = {
-  cap: svg('<path d="M11 19v7c0 2.6 4 4.6 9 4.6s9-2 9-4.6v-7" fill="#e4d3e8"/><path d="M4 15 20 8l16 7-16 7z" fill="#c5b3d5"/>' +
-    '<path d="M33 16.5v8"/><circle cx="33" cy="27" r="2.2" fill="#f2a65a"/>'),
-  progress: svg('<circle cx="20" cy="20" r="13" fill="#e4d3e8"/><path d="M20 7a13 13 0 0 1 0 26z" fill="#d89cb3"/>' +
+  cap: svg('<path d="M11 19v7c0 2.6 4 4.6 9 4.6s9-2 9-4.6v-7" fill="var(--fur1)"/><path d="M4 15 20 8l16 7-16 7z" fill="var(--fur3)"/>' +
+    '<path d="M33 16.5v8"/><circle cx="33" cy="27" r="2.2" fill="var(--orange)"/>'),
+  progress: svg('<circle cx="20" cy="20" r="13" fill="var(--fur1)"/><path d="M20 7a13 13 0 0 1 0 26z" fill="var(--pink)"/>' +
     '<circle cx="20" cy="20" r="13"/><path d="M20 12v8l5 3"/>'),
-  rocket: svg('<path d="M14.5 22 9 28l6.5-.8M25.5 22l5.5 6-6.5-.8" fill="#d89cb3"/><path d="M20 5c6.2 4 8.3 11 6 20H14c-2.3-9-.2-16 6-20z" fill="#c5b3d5"/>' +
-    '<circle cx="20" cy="15" r="3" fill="#f7f8fa"/><path d="M17 29c0 3.5 3 6.5 3 6.5s3-3 3-6.5" fill="#f2a65a"/>'),
-  board: svg('<rect x="5" y="7" width="30" height="20" rx="3" fill="#c5b3d5"/><path d="M10 13.5h13M10 18.5h8M13 27l-3 7M27 27l3 7"/>' +
-    '<circle cx="29" cy="20" r="2.2" fill="#f2a65a"/>'),
-  chat: svg('<path d="M28 17h5a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-1v3.5L28 29h-5a3 3 0 0 1-3-3" fill="#d89cb3"/>' +
-    '<path d="M6 8h17a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H13l-5 4v-4H6a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3z" fill="#e4d3e8"/><path d="M9 13.5h11M9 17.5h7"/>'),
-  mic: svg('<rect x="15" y="4" width="10" height="17" rx="5" fill="#c5b3d5"/><path d="M10 17a10 10 0 0 0 20 0M20 27v7M14 34h12M18 9.5h4M18 13.5h4"/>' +
-    '<circle cx="34" cy="8" r="1.6" fill="#f2a65a" stroke="none"/><circle cx="6" cy="10" r="1.3" fill="#d89cb3" stroke="none"/>'),
-  bulb: svg('<path d="M20 6a10 10 0 0 0-6 18c1 1 2 2.4 2 4h8c0-1.6 1-3 2-4A10 10 0 0 0 20 6z" fill="#e4d3e8"/><path d="M16 32h8M17.5 35.5h5"/>' +
-    '<path d="M17 20l3 3 3-3" /><path d="M3.5 15H6M34 15h2.5M7.5 4.5l2 2M32.5 4.5l-2 2" stroke="#f2a65a"/>'),
-  book: svg('<path d="M20 10c-4-3-9-3-15-2v22c6-1 11-1 15 2 4-3 9-3 15-2V8c-6-1-11-1-15 2z" fill="#e4d3e8"/><path d="M20 10v22" />' +
+  rocket: svg('<path d="M14.5 22 9 28l6.5-.8M25.5 22l5.5 6-6.5-.8" fill="var(--pink)"/><path d="M20 5c6.2 4 8.3 11 6 20H14c-2.3-9-.2-16 6-20z" fill="var(--fur3)"/>' +
+    '<circle cx="20" cy="15" r="3" fill="var(--pill)"/><path d="M17 29c0 3.5 3 6.5 3 6.5s3-3 3-6.5" fill="var(--orange)"/>'),
+  board: svg('<rect x="5" y="7" width="30" height="20" rx="3" fill="var(--fur3)"/><path d="M10 13.5h13M10 18.5h8M13 27l-3 7M27 27l3 7"/>' +
+    '<circle cx="29" cy="20" r="2.2" fill="var(--orange)"/>'),
+  chat: svg('<path d="M28 17h5a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-1v3.5L28 29h-5a3 3 0 0 1-3-3" fill="var(--pink)"/>' +
+    '<path d="M6 8h17a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H13l-5 4v-4H6a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3z" fill="var(--fur1)"/><path d="M9 13.5h11M9 17.5h7"/>'),
+  mic: svg('<rect x="15" y="4" width="10" height="17" rx="5" fill="var(--fur3)"/><path d="M10 17a10 10 0 0 0 20 0M20 27v7M14 34h12M18 9.5h4M18 13.5h4"/>' +
+    '<circle cx="34" cy="8" r="1.6" fill="var(--orange)" stroke="none"/><circle cx="6" cy="10" r="1.3" fill="var(--pink)" stroke="none"/>'),
+  bulb: svg('<path d="M20 6a10 10 0 0 0-6 18c1 1 2 2.4 2 4h8c0-1.6 1-3 2-4A10 10 0 0 0 20 6z" fill="var(--fur1)"/><path d="M16 32h8M17.5 35.5h5"/>' +
+    '<path d="M17 20l3 3 3-3" /><path d="M3.5 15H6M34 15h2.5M7.5 4.5l2 2M32.5 4.5l-2 2" stroke="var(--orange)"/>'),
+  book: svg('<path d="M20 10c-4-3-9-3-15-2v22c6-1 11-1 15 2 4-3 9-3 15-2V8c-6-1-11-1-15 2z" fill="var(--fur1)"/><path d="M20 10v22" />' +
     '<path d="M9 14c2.5-.4 5-.2 7 .8M9 19c2.5-.4 5-.2 7 .8M24 14.8c2-1 4.5-1.2 7-.8" /><path d="M24 19.8c2-1 4.5-1.2 7-.8" stroke="#b77292"/>'),
-  sparkle: svg('<path d="M17 6c1 7 3 9 10 10-7 1-9 3-10 10-1-7-3-9-10-10 7-1 9-3 10-10z" fill="#d89cb3"/>' +
-    '<path d="M30 24c.5 3.3 1.4 4.2 4.7 4.7-3.3.5-4.2 1.4-4.7 4.7-.5-3.3-1.4-4.2-4.7-4.7 3.3-.5 4.2-1.4 4.7-4.7z" fill="#f2a65a"/>'),
-  flag: svg('<path d="M11 7h20l-4.5 6.5L31 20H11z" fill="#d89cb3"/><path d="M11 35V5"/><path d="M16 13.5l2.5 2.5 5-5" />' +
+  sparkle: svg('<path d="M17 6c1 7 3 9 10 10-7 1-9 3-10 10-1-7-3-9-10-10 7-1 9-3 10-10z" fill="var(--pink)"/>' +
+    '<path d="M30 24c.5 3.3 1.4 4.2 4.7 4.7-3.3.5-4.2 1.4-4.7 4.7-.5-3.3-1.4-4.2-4.7-4.7 3.3-.5 4.2-1.4 4.7-4.7z" fill="var(--orange)"/>'),
+  flag: svg('<path d="M11 7h20l-4.5 6.5L31 20H11z" fill="var(--pink)"/><path d="M11 35V5"/><path d="M16 13.5l2.5 2.5 5-5" />' +
     '<path d="M6 35h11"/>'),
-  loop: svg('<circle cx="20" cy="20" r="8.5" fill="#e4d3e8" stroke="none"/><path d="M31.5 17A12 12 0 0 0 10 12.5M8.5 23A12 12 0 0 0 30 27.5"/>' +
-    '<path d="M10 6.5v6h6M30 33.5v-6h-6"/><circle cx="20" cy="20" r="2.4" fill="#f2a65a"/>'),
-  cube: svg('<path d="M20 5l13 7v15l-13 8-13-8V12z" fill="#c5b3d5"/><path d="M20 5l13 7-13 7-13-7z" fill="#e4d3e8"/>' +
+  loop: svg('<circle cx="20" cy="20" r="8.5" fill="var(--fur1)" stroke="none"/><path d="M31.5 17A12 12 0 0 0 10 12.5M8.5 23A12 12 0 0 0 30 27.5"/>' +
+    '<path d="M10 6.5v6h6M30 33.5v-6h-6"/><circle cx="20" cy="20" r="2.4" fill="var(--orange)"/>'),
+  cube: svg('<path d="M20 5l13 7v15l-13 8-13-8V12z" fill="var(--fur3)"/><path d="M20 5l13 7-13 7-13-7z" fill="var(--fur1)"/>' +
     '<path d="M20 19v16M7 12l13 7 13-7"/>'),
-  wave: svg('<path d="M4 25c3.5-8 7.5-8 11 0s7.5 8 11 0 6-8 10-4" /><circle cx="15" cy="25" r="3.2" fill="#d89cb3"/>' +
-    '<path d="M6 11h7M8 15.5h4" stroke="#b77292"/><circle cx="30" cy="10" r="4" fill="#e4d3e8"/>'),
-  wand: svg('<path d="M7 33 25 15" stroke-width="3.2"/><path d="M25 15l2.5-2.5" stroke="#f2a65a" stroke-width="3.2"/>' +
-    '<path d="M29 4c.7 3.6 1.6 4.6 5 5.3-3.4.7-4.3 1.7-5 5.3-.7-3.6-1.6-4.6-5-5.3 3.4-.7 4.3-1.7 5-5.3z" fill="#d89cb3"/>' +
-    '<circle cx="12" cy="10" r="1.6" fill="#c5b3d5" stroke="none"/><circle cx="33" cy="25" r="1.4" fill="#c5b3d5" stroke="none"/>'),
+  wave: svg('<path d="M4 25c3.5-8 7.5-8 11 0s7.5 8 11 0 6-8 10-4" /><circle cx="15" cy="25" r="3.2" fill="var(--pink)"/>' +
+    '<path d="M6 11h7M8 15.5h4" stroke="#b77292"/><circle cx="30" cy="10" r="4" fill="var(--fur1)"/>'),
+  wand: svg('<path d="M7 33 25 15" stroke-width="3.2"/><path d="M25 15l2.5-2.5" stroke="var(--orange)" stroke-width="3.2"/>' +
+    '<path d="M29 4c.7 3.6 1.6 4.6 5 5.3-3.4.7-4.3 1.7-5 5.3-.7-3.6-1.6-4.6-5-5.3 3.4-.7 4.3-1.7 5-5.3z" fill="var(--pink)"/>' +
+    '<circle cx="12" cy="10" r="1.6" fill="var(--fur3)" stroke="none"/><circle cx="33" cy="25" r="1.4" fill="var(--fur3)" stroke="none"/>'),
 };
 const TICK = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 5" fill="none" ' +
   'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 // ---------------------------------------------------------------- helpers
-function el(tag, attrs = {}, ...kids) {
-  const n = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v == null || v === false) continue;
-    if (k === 'class') n.className = v;
-    else if (k === 'html') n.innerHTML = v;
-    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
-    else n.setAttribute(k, v === true ? '' : v);
-  }
-  for (const k of kids.flat()) if (k != null && k !== false) n.append(k);
-  return n;
-}
+import { h as el } from './dom.js';
 const isEmpty = v => v == null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));

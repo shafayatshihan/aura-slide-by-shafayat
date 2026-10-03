@@ -1,7 +1,7 @@
 // Upload panel for one "3 - Put your files here/<folder>" screen: drop zone, sequential uploads with a progress bar
 // per file, the files already in the folder, remove for files added this session, and (Report only) the main-report pick.
 // mountUploads(el, { folder, title, hint, accept, setKey, getState, bus, audio }) -> { destroy() }
-import { upload, getJSON, postJSON } from './api.js';
+import { upload, files, removeFile } from './api.js';
 import { emit } from './bus.js';
 
 const MAX_BYTES = 2 * 1024 ** 3;
@@ -13,18 +13,7 @@ const TONES = [
   [/\.(mp4|mov|avi|mkv|webm)$/i, 'VID', 'plum'],
 ];
 
-function h(tag, attrs = {}, ...kids) {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v == null || v === false) continue;
-    if (k === 'class') e.className = v;
-    else if (k === 'html') e.innerHTML = v;
-    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
-    else e.setAttribute(k, v === true ? '' : v);
-  }
-  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
-  return e;
-}
+import { h } from './dom.js';
 const baseName = p => String(p || '').split(/[\\/]/).pop();
 const ext = n => { const m = /\.([a-z0-9]{1,5})$/i.exec(n); return m ? m[1].toUpperCase() : 'FILE'; };
 function kindOf(name) {
@@ -47,15 +36,15 @@ function friendlyError(r) {
 }
 
 const ZONE_ART = `<svg class="up-art" viewBox="0 0 120 92" aria-hidden="true">
-  <ellipse cx="60" cy="86" rx="40" ry="4" fill="#c5b3d5" opacity=".55"/>
-  <path class="up-back" d="M16 26a8 8 0 0 1 8-8h22l8 8h42a8 8 0 0 1 8 8v42a8 8 0 0 1-8 8H24a8 8 0 0 1-8-8z" fill="#b09fc7"/>
-  <g class="up-sheet"><rect x="32" y="14" width="56" height="58" rx="6" fill="#f7f8fa"/>
-    <rect x="40" y="25" width="30" height="4" rx="2" fill="#d89cb3"/><rect x="40" y="34" width="40" height="3" rx="1.5" fill="#c5b3d5"/>
-    <rect x="40" y="41" width="36" height="3" rx="1.5" fill="#c5b3d5"/><rect x="40" y="48" width="26" height="3" rx="1.5" fill="#c5b3d5"/></g>
+  <ellipse cx="60" cy="86" rx="40" ry="4" fill="var(--fur3)" opacity=".55"/>
+  <path class="up-back" d="M16 26a8 8 0 0 1 8-8h22l8 8h42a8 8 0 0 1 8 8v42a8 8 0 0 1-8 8H24a8 8 0 0 1-8-8z" fill="var(--fur4)"/>
+  <g class="up-sheet"><rect x="32" y="14" width="56" height="58" rx="6" fill="var(--pill)"/>
+    <rect x="40" y="25" width="30" height="4" rx="2" fill="var(--pink)"/><rect x="40" y="34" width="40" height="3" rx="1.5" fill="var(--fur3)"/>
+    <rect x="40" y="41" width="36" height="3" rx="1.5" fill="var(--fur3)"/><rect x="40" y="48" width="26" height="3" rx="1.5" fill="var(--fur3)"/></g>
   <g class="up-front"><path d="M12 44a8 8 0 0 1 8-8h80a8 8 0 0 1 8 8l-4 32a8 8 0 0 1-8 8H24a8 8 0 0 1-8-8z" fill="#d7c2dd"/>
-    <circle cx="60" cy="60" r="11" fill="#080909"/><path d="M60 66v-12m-5 5 5-5 5 5" fill="none" stroke="#f7f8fa" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
-  <circle class="up-spark s1" cx="100" cy="16" r="3" fill="#f2a65a"/><circle class="up-spark s2" cx="20" cy="12" r="2.5" fill="#d89cb3"/>
-  <circle class="up-spark s3" cx="108" cy="36" r="2" fill="#9281b0"/>
+    <circle cx="60" cy="60" r="11" fill="var(--ink)"/><path d="M60 66v-12m-5 5 5-5 5 5" fill="none" stroke="var(--pill)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <circle class="up-spark s1" cx="100" cy="16" r="3" fill="var(--orange)"/><circle class="up-spark s2" cx="20" cy="12" r="2.5" fill="var(--pink)"/>
+  <circle class="up-spark s3" cx="108" cy="36" r="2" fill="var(--fur5)"/>
 </svg>`;
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const CROSS = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
@@ -289,7 +278,7 @@ export function mountUploads(el, { folder, title = 'your files', hint = '', acce
   async function remove(it) {
     if (it.state === 'queued' || it.state === 'error' || !it.path) return drop(it);
     it.row.classList.add('is-busy');
-    const r = await postJSON('/api/remove', { path: it.path });
+    const r = await removeFile(it.path);
     if (!alive) return;
     it.row.classList.remove('is-busy');
     if (r && r.ok !== false) { sfx('deselect'); drop(it); fire('files:removed', { folder, name: it.name, path: it.path }); }
@@ -309,7 +298,7 @@ export function mountUploads(el, { folder, title = 'your files', hint = '', acce
   }
 
   // ---- existing files
-  getJSON('/api/files').then(g => {
+  files().then(g => {
     if (!alive) return;
     if (!Array.isArray(g)) { if (g && g.error === 'offline') say('couldn’t reach lumi to list this folder.'); return; }
     const grp = g.find(x => x && x.folder === folder);

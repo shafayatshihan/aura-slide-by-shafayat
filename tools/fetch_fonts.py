@@ -11,7 +11,10 @@ FAMILIES = [('Anton', 'wght@400', 'ofl/anton'),
             ('DM Sans', 'opsz,wght@9..40,100..1000', 'ofl/dmsans'),
             ('Noto Sans', 'wght@100..900', 'ofl/notosans'),
             ('Source Serif 4', 'opsz,wght@8..60,200..900', 'ofl/sourceserif4'),
-            ('Open Sans', 'wght@300..800', 'ofl/opensans')]
+            ('Open Sans', 'wght@300..800', 'ofl/opensans'),
+            # Bold Blue (measured from the owner's reference deck): Poppins display/text + DM Mono page numbers
+            ('Poppins', 'wght@400;500;600;700;800', 'ofl/poppins'),
+            ('DM Mono', 'wght@400;500', 'ofl/dmmono')]
 get = lambda u: urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=60).read()
 for fam, axes, lic in FAMILIES:
     css = get(f'https://fonts.googleapis.com/css2?family={fam.replace(" ", "+")}:{axes}&display=block').decode()

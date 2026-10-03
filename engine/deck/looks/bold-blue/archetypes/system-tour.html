@@ -1,0 +1,58 @@
+<!-- archetype: system-tour | a camera tour of the parts of a system + one label card that follows the visited part + a small map | main visual: 3D | companions: the following label, a small map (both inside the holder) -->
+<section class="slide" data-kind="content" data-minutes="2" data-title="The system">
+  <div class="safe">
+    <div class="bb-main stack">
+      <div class="bb-head">
+        <p class="kicker" data-edit="s{{N}}-1">08 · How it is wired</p>
+        <h2 class="headline" data-edit="s{{N}}-2">Four parts, <span class="em">one loop</span></h2>
+      </div>
+      <div class="bb-studio bb-stage">
+        <div class="aura-3d bb-3d" data-scene="s{{N}}-scene" data-period="30" role="img" aria-label="A camera tour of the parts; describe each part in the order it is visited.">
+          <div class="bb-tag blue" data-follow="here" data-align="left" data-edit="no"><b class="nm">Part</b><span class="ds">what it does</span></div>
+          <div class="bb-map" data-edit="no" style="position:absolute; right:40px; top:40px; z-index:2">
+            <span class="node root">Whole system</span>
+            <ul><li><span class="node">Part one</span></li><li><span class="node">Part two</span></li><li><span class="node">Part three</span></li><li><span class="node">Part four</span></li></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="bb-foot"><span class="bb-mark" data-edit="s{{N}}-3">Deck mark</span><span class="bb-pageno"></span></footer>
+  </div>
+  <aside class="notes" data-aura-notes>
+    <p>Let the camera do the walking: it visits each part in turn and names it, then pulls back to the whole.</p>
+    <p>For each part, say what goes in, what comes out, and how often. The map at the right lights the part on screen.</p>
+    <p>If asked about a part that is not shown, say whether it exists in the real system or was left out for clarity.</p>
+  </aside>
+</section>
+<script>
+(() => {
+  const PARTS = [
+    { name: 'Part one', desc: 'what it does', at: [-2, 0.6, 0] },
+    { name: 'Part two', desc: 'what it does', at: [0, 0.6, -1] },
+    { name: 'Part three', desc: 'what it does', at: [2, 0.6, 0] },
+    { name: 'Part four', desc: 'what it does', at: [0, 0.6, 1.4] },
+  ];
+  const shots = PARTS.map(p => ({ pos: [p.at[0] * 1.6 + 2.5, 3.2, p.at[2] * 1.6 + 5.5], target: p.at, hold: 4.5, move: 2 }));
+  shots.push({ pos: [3, 6, 10], target: [0, 0.5, 0], hold: 3, move: 1 });      // pull back to the whole system
+  const tour = BBTime.tour({ shots });
+  Aura.scene('s{{N}}-scene', (ctx) => {
+    const { THREE } = ctx;
+    const S = BB3D.studio(ctx, { target: [0, 0.5, 0], distance: 11, post: { bloom: true, dof: true, focus: 7, aperture: 0.35 } });
+    const M = BB3D.materials(THREE);
+    const boxes = PARTS.map((p, i) => { const b = BB3D.roundedBox(THREE, 1.2, 0.5 + 0.2 * i, 1, 0.06, [M.blue, M.black, M.copper, M.ceramic][i]); b.position.set(p.at[0], (0.5 + 0.2 * i) / 2, p.at[2]); return b; });
+    const wire = BB3D.tube(THREE, PARTS.map(p => [p.at[0], 0.08, p.at[2]]), 0.04, M.rubber, { closed: true });
+    S.add(...boxes, wire);
+    const tag = ctx.el.querySelector('[data-follow="here"]'), nodes = ctx.el.querySelectorAll('.bb-map ul .node');
+    let focusAt = PARTS[0].at;
+    BB3D.labels(S, ctx.el, { here: () => [focusAt[0], focusAt[1] + 0.9, focusAt[2]] });
+    return S.api({ update(t) {
+      const shot = tour(t); S.tour(shot);
+      const i = Math.min(shot.focus, PARTS.length - 1), whole = shot.focus === PARTS.length;
+      focusAt = PARTS[i].at;
+      tag.style.opacity = whole ? 0 : 1;
+      tag.querySelector('.nm').textContent = PARTS[i].name; tag.querySelector('.ds').textContent = PARTS[i].desc;
+      nodes.forEach((n, k) => n.classList.toggle('on', whole || k === i));
+    } });
+  }, { period: tour.period });
+})();
+</script>

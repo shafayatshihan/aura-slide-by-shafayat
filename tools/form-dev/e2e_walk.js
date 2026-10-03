@@ -1,0 +1,190 @@
+// Front-end end-to-end walk (X-03): the REAL pages in Edge against a sandbox server with the fake Claude.
+//   loading -> home -> wizard -> plan (typing while the poll runs) -> build (questions, locks, coming-up edits, stop) -> finalize
+//   -> home (rename / archive / delete + undo). Runs at one viewport; zoom 1.5 stands in for Ctrl+ at 150 %.
+// Normally started by tools/form-dev/test_frontend.py --e2e, which makes the sandbox and the server. By hand:
+//   AURA_E2E_PORT=8798 node tools/form-dev/e2e_walk.js 1366 768 [1.5]      (server already running on that port)
+// Env: AURA_E2E_PORT (8798), AURA_E2E_OUT (screenshots folder), AURA_PLAYWRIGHT (path of the playwright package).
+// Exit code 0 only when every check below holds and the page logged no console error.
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const PW = [process.env.AURA_PLAYWRIGHT, 'playwright', 'X:/CLPHP_Project/frontend/node_modules/playwright'].filter(Boolean);
+let chromium;
+for (const p of PW) { try { ({ chromium } = require(p)); break; } catch (e) { /* next */ } }
+if (!chromium) { console.log('SKIP: playwright is not installed (set AURA_PLAYWRIGHT)'); process.exit(2); }
+const PORT = +process.env.AURA_E2E_PORT || 8798;
+const W = +process.argv[2] || 1366, H = +process.argv[3] || 768, Z = +process.argv[4] || 1;
+const tag = Z > 1 ? `zoom${Math.round(Z * 100)}` : `${W}x${H}`;
+const OUT = path.join(process.env.AURA_E2E_OUT || path.join(os.tmpdir(), 'lumi-e2e'), tag) + path.sep;
+fs.mkdirSync(OUT, { recursive: true });
+for (const f of fs.readdirSync(OUT)) fs.rmSync(OUT + f);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let n = 0, pass = 0, total = 0;
+const log = (...a) => console.log(`[${tag}]`, ...a);
+(async () => {
+  const browser = await chromium.launch({ channel: 'msedge' });
+  const ctx = await browser.newContext({ viewport: { width: Math.round(W / Z), height: Math.round(H / Z) }, deviceScaleFactor: Z });
+  const page = await ctx.newPage();
+  const errs = [];
+  page.on('pageerror', e => errs.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error') errs.push('console.error: ' + m.text().slice(0, 200)); });
+  const shot = async name => { await page.screenshot({ path: `${OUT}${String(++n).padStart(2, '0')}-${name}.png` }); };
+  const scrolls = () => page.evaluate(() => ({ doc: document.documentElement.scrollHeight > innerHeight + 2 || document.documentElement.scrollWidth > innerWidth + 2, zoom: document.documentElement.dataset.zoom, cls: document.documentElement.className }));
+  const dlg = async text => { await page.click(`.pl-dlg .pl-big:has-text("${text}")`); };
+  const waitBuilt = async k => page.waitForFunction(k => { const b = document.querySelector('.bd-main'); return b && !b.disabled && /next slide|finalize/.test(b.textContent) && true; }, k, { timeout: 180000 });
+  const R = {};
+  try {
+    await page.goto(`http://127.0.0.1:${PORT}/${Z > 1 ? '?zoom=' + Z : ''}`);
+    await sleep(900); await shot('loading');
+    await page.waitForFunction(() => window.__aura && window.__aura.route === 'home', null, { timeout: 120000 });
+    await sleep(1200); await shot('home-empty'); R.homeScroll = await scrolls();
+
+    // ---- a second deck to practise the library actions on
+    await page.evaluate(() => fetch('/api/decks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
+
+    // ---- wizard
+    await page.evaluate(() => window.__aura.newDeck());
+    await page.waitForFunction(() => window.__aura.route === 'wizard');
+    await sleep(1500); await shot('wizard-welcome');
+    await page.click('#begin'); await sleep(1800); await shot('wizard-step');
+    R.wizardScreen = await page.evaluate(() => window.__aura.screen);
+    R.wizardScroll = await scrolls();
+    // a held Enter / double next must not orphan a scene (F-20): press next twice quickly if enabled
+    await page.evaluate(() => window.__aura.go('welcome'));
+    await sleep(300);
+    await page.evaluate(() => { window.__aura.go('basics'); window.__aura.go('review'); });
+    await sleep(2500);
+    R.scenes = await page.evaluate(() => document.querySelectorAll('.scene-host').length);
+
+    // ---- plan
+    await page.evaluate(() => window.__aura.plan());
+    await page.waitForSelector('.pl-big.pl-ink'); await sleep(500); await shot('plan-intro');
+    await page.click('.pl-big.pl-ink');
+    await sleep(1200); await shot('planning');
+    await page.waitForSelector('.pl-list .pl-row', { timeout: 120000 }); await sleep(1500); await shot('plan-ready'); R.planScroll = await scrolls();
+
+    // F-18: type in the deck question box and let several polls pass
+    await page.click('.pl-strip .pl-dq-opt >> nth=1');
+    await page.click('.pl-strip .pl-dq-free'); await page.keyboard.type('typed while polling');
+    await sleep(6500);
+    R.noWipe = await page.evaluate(() => ({ v: document.querySelector('.pl-strip .pl-dq-free').value, on: (document.querySelector('.pl-strip .pl-dq-opt.on') || {}).textContent, focus: document.activeElement.className }));
+    await shot('plan-typing-kept');
+    // answer every deck-wide question, then every slide question
+    for (let i = 0; i < 6; i++) {
+      const b = page.locator('.pl-strip .pl-dq-send');
+      if (!(await b.count()) || !(await b.first().isVisible())) break;
+      await b.first().click(); await sleep(1800);
+    }
+    for (let i = 0; i < 6; i++) {
+      const q = page.locator('.pl-qbadge');
+      if (!(await q.count())) { const row = page.locator('.pl-row:has(.pl-st.is-q)'); if (await row.count()) { await row.first().click(); await sleep(400); continue; } break; }
+      await q.first().click(); await sleep(400);
+      for (let k = 0; k < 6; k++) { const s = page.locator('.pl-badgepop .pl-dq-send'); if (!(await s.count()) || !(await s.first().isVisible())) break; await s.first().click(); await sleep(900); }
+      await sleep(1500);
+    }
+    await sleep(2500); await shot('plan-answered');
+    // remove slides until 3 are left (two taps each), then undo one removal to see the undo toast
+    while ((await page.locator('.pl-cpos').textContent()).match(/of (\d+)/)[1] > 3 || false) {
+      const total = +(await page.locator('.pl-cpos').textContent()).match(/of (\d+)/)[1];
+      if (total <= 3) break;
+      await page.click('.pl-act[aria-label="remove this slide"]'); await page.click('.pl-act[aria-label="remove this slide"]'); await sleep(900);
+    }
+    await sleep(1500); await shot('plan-three'); R.undoVisible = await page.evaluate(() => !document.querySelector('.pl-undo').hidden);
+    // slide 2 gets "ask-me" in its title so Claude asks real questions when it is built
+    await page.click('.pl-row >> nth=1');
+    await page.fill('.pl-title-in', 'ask-me the second one'); await page.keyboard.press('Tab');
+    await sleep(2000);
+    await page.waitForFunction(() => !document.querySelector('.pl-build').disabled, null, { timeout: 120000 });
+    await shot('plan-before-build');
+    await page.click('.pl-build'); await page.waitForSelector('.pl-dlg'); await sleep(500); await shot('plan-build-dialog');
+    await dlg('yes, build slide 1');
+
+    // ---- build page
+    await page.waitForFunction(() => window.__aura.route === 'build', null, { timeout: 30000 });
+    await sleep(2500); await shot('build-running'); R.buildScroll = await scrolls();
+    R.homeEnabledWhileRunning = await page.evaluate(() => !document.querySelector('.ed-home').disabled);
+    // W-01: edit the unbuilt slide 3 (coming up) while slide 1 is being built
+    await page.click('.bd-up-row >> nth=-1');
+    await page.waitForSelector('.bd-card'); await sleep(500); await shot('build-coming-up-edit');
+    await page.fill('.bd-card .pl-title-in', 'edited while building'); await page.keyboard.press('Tab');
+    await page.click('.pl-dlg .pl-big:has-text("save")'); await sleep(1500);
+    R.comingUpSaved = await page.evaluate(async () => { const id = location.hash; const l = await (await fetch('/api/decks')).json(); const d = l.decks.find(x => x.planCount); const p = await (await fetch('/api/decks/' + d.id + '/plan')).json(); return p.plan.slides.map(s => s.title); });
+    // the slide being built right now says so
+    const rows = await page.locator('.bd-up-row').count();
+    await page.evaluate(() => { const r = [...document.querySelectorAll('.bd-up-row')].find(x => x.classList.contains('is-now')); if (r) r.click(); });
+    await sleep(500); R.targetBlocked = await page.evaluate(() => document.querySelector('.ed-toast').textContent);
+    await shot('build-target-blocked');
+    // add a slide from the coming-up header, then remove it again
+    await page.click('.bd-up-add'); await page.waitForSelector('.bd-card'); await page.fill('.bd-card .pl-title-in', 'a slide added mid build'); await page.keyboard.press('Tab');
+    await page.click('.pl-dlg .pl-big:has-text("save")'); await sleep(1500); await shot('build-slide-added');
+    R.slidesAfterAdd = await page.evaluate(() => document.querySelector('.bd-up-n').textContent);
+    await page.click('.bd-up-row:has-text("a slide added")').catch(async () => { await page.click('.bd-up-more'); await sleep(400); await page.click('.bd-all .bd-up-row:has-text("a slide added")'); });
+    await page.waitForSelector('.bd-card'); await shot('build-remove-dialog');
+    await page.click('.pl-dlg .pl-big:has-text("remove this slide")'); await page.click('.pl-dlg .pl-big:has-text("tap again")'); await sleep(1500);
+    R.slidesAfterRemove = await page.evaluate(() => document.querySelector('.bd-up-n').textContent);
+    await waitBuilt(); await sleep(1500); await shot('build-slide1-done');
+    // ---- slide 2: Claude asks real questions
+    await page.click('.bd-main');
+    await page.waitForSelector('.ws-pop', { timeout: 90000 }); await sleep(1200); await shot('build-questions');
+    R.locked = await page.evaluate(() => document.querySelector('.bd-main').disabled);
+    R.popFocus = await page.evaluate(() => !!document.activeElement.closest('.ws-pop'));
+    await page.keyboard.press('ArrowDown'); await sleep(200);
+    for (let i = 0; i < 6; i++) {
+      await page.click('.ws-pop .ch-q:not([hidden]) .ch-opt >> nth=0');
+      const nx = page.locator('.ws-pop .ch-next:not([hidden])');
+      if (await nx.count() && await nx.first().isVisible()) await nx.first().click(); else break;
+    }
+    await shot('build-questions-last');
+    await page.click('.ws-pop .ch-send');
+    await waitBuilt(); await sleep(1200); await shot('build-slide2-done');
+    // ---- stop test on slide 3
+    await page.click('.bd-main'); await page.waitForSelector('.bd-stop:not([hidden])', { timeout: 20000 }); await sleep(1500);
+    await page.click('.bd-stop'); await page.waitForSelector('.pl-dlg'); await shot('build-stop-dialog');
+    await dlg('stop'); await sleep(2500);
+    R.afterStop = await page.evaluate(() => ({ main: document.querySelector('.bd-main .lbl').textContent, disabled: document.querySelector('.bd-main').disabled }));
+    await shot('build-stopped');
+    await page.click('.bd-main'); await waitBuilt(); await sleep(1200); await shot('build-all-built');
+    // ---- finalize
+    await page.click('.bd-main');
+    await page.waitForFunction(() => window.__aura.route === 'finalize'); await sleep(2500); await shot('finalizing');
+    await page.waitForFunction(() => /all done|already finalized/.test(document.querySelector('.fz-h') ? document.querySelector('.fz-h').textContent : ''), null, { timeout: 240000 });
+    await sleep(1000); await shot('finalized'); R.finScroll = await scrolls();
+    await page.click('.fz-b:has-text("back to my decks")'); await page.waitForFunction(() => window.__aura.route === 'home'); await sleep(2500); await shot('home-with-decks');
+    // ---- library actions: rename, archive, delete + undo
+    const card = page.locator('.hm-card').first();
+    await card.locator('.hm-more').click(); await sleep(400); await shot('home-menu');
+    await page.click('.hm-mi:has-text("rename")'); await page.fill('.hm-rename', 'Renamed from the library'); await page.keyboard.press('Enter'); await sleep(1500);
+    R.renamed = await page.evaluate(() => [...document.querySelectorAll('.hm-title')].map(x => x.textContent));
+    await shot('home-renamed');
+    await page.locator('.hm-card').last().locator('.hm-more').click(); await page.click('.hm-mi:has-text("archive")'); await sleep(1800);
+    R.afterArchive = await page.evaluate(() => ({ cards: document.querySelectorAll('.hm-card').length, arch: document.querySelector('.hm-arch').textContent }));
+    await shot('home-archived');
+    await page.click('.hm-arch'); await sleep(800); await shot('home-archive-view'); await page.click('.hm-arch'); await sleep(800);
+    await page.locator('.hm-card').first().locator('.hm-more').click();
+    await page.click('.hm-mi:has-text("delete")'); await page.click('.hm-mi:has-text("tap again")'); await sleep(1500);
+    R.afterDelete = await page.evaluate(() => ({ cards: document.querySelectorAll('.hm-card').length, toast: document.querySelector('.hm-toast').textContent }));
+    await shot('home-deleted-undo');
+    await page.click('.hm-undo'); await sleep(2000);
+    R.afterUndo = await page.evaluate(() => document.querySelectorAll('.hm-card').length);
+    await shot('home-restored');
+    log(JSON.stringify(R, null, 1));
+    const ok = (name, cond) => { total++; if (cond) pass++; log((cond ? 'PASS ' : 'FAIL ') + name); };
+    ok('home does not scroll at a normal zoom', Z > 1 || !R.homeScroll.doc);
+    ok('zoom makes the page scroll instead of clipping (F-08)', Z === 1 || R.homeScroll.cls.includes('scrolls') || R.planScroll.cls.includes('scrolls'));
+    ok('a double next leaves exactly one scene (F-20)', R.scenes === 1);
+    ok('typing in a plan question survives the polls (F-18)', R.noWipe.v === 'typed while polling' && R.noWipe.on === 'Classmates' && /pl-dq-free/.test(R.noWipe.focus));
+    ok('leaving the build page while claude works is allowed (W-04)', R.homeEnabledWhileRunning === true);
+    ok('an unbuilt slide can be edited mid-build (W-01)', R.comingUpSaved.includes('edited while building'));
+    ok('the slide being built right now says so', /building this slide right now/.test(R.targetBlocked));
+    ok('add / remove a slide mid-build (W-01)', R.slidesAfterAdd === '3' && R.slidesAfterRemove === '2');
+    ok("claude's questions lock the build and take focus", R.locked === true && R.popFocus === true);
+    ok('stop leaves a buildable deck', R.afterStop.main === 'make next slide' && R.afterStop.disabled === false);
+    ok('rename from the library (W-02)', R.renamed.includes('Renamed from the library'));
+    ok('archive hides a deck and counts it (W-02)', R.afterArchive.cards === 1 && /\(1\)/.test(R.afterArchive.arch));
+    ok('delete moves to the bin and undo brings it back (W-02)', R.afterDelete.cards === 0 && /moved to the bin/.test(R.afterDelete.toast) && R.afterUndo === 1);
+    ok('no console errors', errs.length === 0);
+  } catch (e) { log('ERR', e.message.split('\n')[0]); log(JSON.stringify(R)); total++; try { await page.screenshot({ path: OUT + 'zz-error.png' }); } catch (x) { /* gone */ } }
+  finally { log('CONSOLE ERRORS:', errs.join(' | ') || 'none'); await browser.close(); }
+  log(`${pass}/${total} e2e checks passed`);
+  process.exit(pass === total && total > 0 ? 0 : 1);
+})();

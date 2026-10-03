@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-look="bold-blue">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<!-- Lumi deck in the Bold Blue look. The authority is .claude/skills/aura-slide/looks/bold-blue/LOOK.md: read it before
+     writing a slide. Add slides from the archetype menu with
+       node .aura/engine/tools/new_deck.js --snippet <archetype> --slide <n>      (list: --snippet list)
+     and paste each one before the closing slide. Rules in one breath: 1920 x 1080, 96 px safe zone (.safe), Poppins +
+     DM Mono only, the type scale and the 20 px exception of LOOK.md section 1, ONE blue .em phrase per headline, ONE main visual per slide, every 3D scene registers a loop period
+     (Aura.scene(id, setup, { period })) and uses BB3D.studio (shadows + textures + reflections), speaker notes 60-300
+     words in <aside class="notes" data-aura-notes>, stable data-edit ids on every text.
+     STAGING NOTE: the slide-1 scene at the bottom is a NEUTRAL placeholder (a blob and a ring), not a design. Decide what the
+     subject really is (LOOK.md 4.0) and show it in its own setting. No wooden base, gauge, vial or stand unless the subject is that. -->
+<link rel="stylesheet" href="{{ENGINE}}/deck/runtime.css">
+<link rel="stylesheet" href="{{ENGINE}}/deck/themes/bold-blue.css">
+<script type="importmap">{"imports":{"three":"{{ENGINE}}/node_modules/three/build/three.module.js"}}</script>
+<script src="{{ENGINE}}/deck/runtime.js"></script>
+{{LOOK_HEAD}}<style>
+  /* deck-specific layout goes here; bold-blue.css already sets type, colour, footer, stat stacks, tags and motion */
+  .bb-hero { position: relative; z-index: 1; width: 860px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+  .bb-hero .title { margin-top: 28px; }
+</style>
+</head>
+<body>
+<main class="deck" data-mode="presenter">
+
+  <!-- ============ 01 title + 3D hero (archetype: title-hero) ============ -->
+  <section class="slide bb-title-bg" data-kind="title" data-minutes="0.75" data-title="Title">
+    <div class="aura-3d bb-full" data-scene="s1-hero" data-period="20" aria-hidden="true"></div>
+    <div class="safe">
+      <div class="bb-hero">
+        <p class="kicker dot" data-edit="s1-1">{{KICKER}}</p>
+        <h1 class="title" data-edit="s1-2">{{TITLE}}</h1>
+        <ul class="bb-meta">
+          <li data-edit="s1-3"><span class="lb">Presented by</span><b>Presenter Name</b></li>
+          <li data-edit="s1-4"><span class="lb">For</span><b>Course or event</b><br>Institution</li>
+        </ul>
+      </div>
+      <footer class="bb-foot"><span class="bb-mark" data-edit="s1-5">Deck mark</span><span class="bb-pageno"></span></footer>
+    </div>
+    <aside class="notes" data-aura-notes>
+      <p>Open by naming the object on screen, not the theory behind it. Say what it is in one plain sentence, then say why
+      this room should care about it today.</p>
+      <p>Point at the model: tell them it is built from the real geometry and that the motion they see is the behaviour
+      this talk explains.</p>
+      <p>Frame the talk in three beats: why it matters, how it works, what we found. If asked about the model, say it is
+      a schematic render, not a photograph.</p>
+    </aside>
+  </section>
+
+  <!-- paste archetype slides here (node .aura/engine/tools/new_deck.js --snippet list) -->
+
+  <!-- ============ closing: design it for THIS deck (LOOK.md section 2): message, subject visual, layout variant ============ -->
+  <section class="slide bb-close-bg" data-kind="closing" data-minutes="0.5" data-title="Closing">
+    <div class="safe">
+      <div class="bb-main">
+        <div class="bb-l w7">
+          <h1 class="bb-thanks bb-msg" data-edit="s99-0">One sentence that fits <span class="em">this talk</span></h1>
+          <p class="bb-q" data-edit="s99-1"><span class="bb-ping"></span>A last line: question, next step or contact</p>
+          <div class="bb-rule"></div>
+          <ul class="bb-people">
+            <li><span class="lb" data-edit="s99-2">Presented by</span><strong data-edit="s99-3">Presenter Name</strong><em data-edit="s99-4">ID or role</em></li>
+            <li class="gap"><span class="lb" data-edit="s99-5">With thanks</span><strong data-edit="s99-6">Supervisor Name</strong><em data-edit="s99-7">Title, institution</em></li>
+          </ul>
+        </div>
+        <div class="bb-r w5"></div>
+      </div>
+      <footer class="bb-foot"><span class="bb-mark" data-edit="s99-8">Deck mark</span><span class="bb-pageno"></span></footer>
+    </div>
+    <aside class="notes" data-aura-notes>
+      <p>Say the closing message in your own words, then thank the people named and open the floor.</p>
+      <p>Leave this slide up during questions: names stay on screen. If a question needs a figure, type its slide number and
+      press Enter to jump straight to it, then press End to come back here.</p>
+      <p>Likely question: how sure are the numbers? Answer with the source line on the chart slide, and say plainly which
+      curves are illustrative.</p>
+    </aside>
+  </section>
+
+</main>
+<script>
+/* ---- slide 1: hero object on the studio floor. The blob and ring are a NEUTRAL placeholder: replace them with the real subject
+   in its own setting (LOOK.md 4.0). No wooden base, gauge, vial or stand unless the subject is that. ---- */
+Aura.scene('s1-hero', (ctx) => {
+  const { THREE } = ctx;
+  // the photo cyclorama preset (measured from the reference title render): long lens, frame shifted so the object
+  // sits in the right half, clear of the title
+  const S = BB3D.studio(ctx, { cyc: true, target: [0, 1.4, 0], distance: 16 });
+  const M = BB3D.materials(THREE);
+  const g = new THREE.Group();
+  const core = BB3D.blob(THREE, { radius: 0.95, seed: 3 }, M.soft); core.position.y = 1.2; g.add(core);   // neutral placeholder: replace with the subject
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.06, 24, 96), M.copper); ring.rotation.x = Math.PI / 2; ring.position.y = 1.2; ring.scale.setScalar(1.5); g.add(ring);
+  g.add(BB3D.contactShadow(THREE, 4.2, 3, { opacity: 0.45 }));
+  S.add(g);
+  return S.api({ update(t) {
+    const w = BBTime.phase(t, ctx.period);          // every motion uses whole harmonics of the period: seamless loop
+    S.orbit(t);
+    core.rotation.y = w;
+    core.position.y = 1.2 + 0.06 * Math.sin(2 * w);
+  } });
+}, { period: 20 });
+</script>
+</body>
+</html>

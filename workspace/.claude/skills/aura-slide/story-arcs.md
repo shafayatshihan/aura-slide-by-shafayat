@@ -28,10 +28,11 @@ title, institution / department, event and date; use `data-kind="title"`.
   the why; the public wants the impact. Put the slide time where your audience's questions will be.
 
 ## Presenter mode or document mode
-- **Presenter** (default; a person talks over the slides): ≤ 25 words per content slide, image-led, the detail goes
+- **Presenter** (default; a person talks over the slides): few words per content slide, image-led, the detail goes
   in the speaker notes.
-- **Document** (read without a speaker, e.g. `delivery.where` says it is sent as a file or read online): ≤ 75 words,
+- **Document** (read without a speaker, e.g. `delivery.where` says it is sent as a file or read online): more words,
   visible structure, sources on the slide.
+The word budgets for both are in the numbers table in `.claude/CLAUDE.md`.
 Decide once per deck (`<main class="deck" data-mode="...">`) and never mix.
 
 ## Headlines

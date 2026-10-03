@@ -193,6 +193,18 @@ namespace Lumi
             if (c != null && c.TryGetValue("formPort", out v)) { try { return Convert.ToInt32(v, CultureInfo.InvariantCulture); } catch { } }
             return 8765;
         }
+        // The port the server really bound (it moves on to the next free one when the configured port is taken): .aura/temp/port
+        public static string PortFile { get { return Path.Combine(Paths.Aura, "temp", "port"); } }
+        public static int ActivePort()
+        {
+            try
+            {
+                int p;
+                if (File.Exists(PortFile) && int.TryParse(File.ReadAllText(PortFile).Trim(), out p) && p > 1023 && p < 65536) return p;
+            }
+            catch { }
+            return 0;
+        }
         public static string ZipUrl()
         {
             Dictionary<string, object> c = Load();
@@ -551,6 +563,8 @@ namespace Lumi
         public static string Start(bool openWindow = true)
         {
             int port = Cfg.Port();
+            int active = Cfg.ActivePort();       // W-07: the server may be on the next free port when the configured one was taken
+            if (active > 0 && active != port && Ping(Url(active)) != null) port = active;
             string url = Url(port);
             Dictionary<string, object> ping = Ping(url);
             if (ping != null && !ping.ContainsKey("api")) { StopServer(port); ping = Ping(url); }   // a pre-web-app server
@@ -562,12 +576,15 @@ namespace Lumi
                 if (pyw == null) { Log.W("no working Python"); return "python"; }
                 ProcessStartInfo psi = new ProcessStartInfo(pyw, "\"" + server + "\"");
                 psi.UseShellExecute = false; psi.CreateNoWindow = true; psi.WorkingDirectory = Paths.Engine;
+                try { File.Delete(Cfg.PortFile); } catch { }
                 Process p = Process.Start(psi);
                 Log.W("server started: pid " + p.Id + "  " + pyw + "  port " + port);
                 bool up = false;
                 for (int i = 0; i < 120 && !up; i++)
                 {
                     Thread.Sleep(250);
+                    int np = Cfg.ActivePort();
+                    if (np > 0 && np != port) { port = np; url = Url(np); Log.W("server is on port " + np + " (the configured port was busy)"); }
                     if (Ping(url) != null) up = true;
                     else if (p.HasExited) { Log.W("server exited with code " + p.ExitCode); return "server"; }
                 }

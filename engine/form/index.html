@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light only">
 <title>Lumi</title>
 <meta name="description" content="Tell Lumi about your talk and Claude builds the slides.">
 <link rel="icon" href="/icon.png">
@@ -13,6 +14,8 @@
 <link rel="stylesheet" href="/css/cursor.css">
 <link rel="stylesheet" href="/css/components.css">
 <link rel="stylesheet" href="/css/studio.css">
+<link rel="stylesheet" href="/css/plan.css">
+<link rel="stylesheet" href="/css/theme.css">
 </head>
 <body>
 <div id="stage" data-mode="full" data-route="loading" data-screen="welcome">
@@ -26,8 +29,8 @@
   </div>
 
   <div id="topbar">
-    <span id="saved" aria-live="polite"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>saved</span>
-    <span id="counter"></span>
+    <span id="saved"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>saved</span>
+    <span id="counter" aria-live="polite"></span>
     <button id="homeBtn" class="home-pill" type="button" hidden data-cursor-label="library">
       <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.6" fill="currentColor"/><rect x="11" y="3" width="6" height="6" rx="1.6" fill="currentColor" opacity=".55"/><rect x="3" y="11" width="6" height="6" rx="1.6" fill="currentColor" opacity=".55"/><rect x="11" y="11" width="6" height="6" rx="1.6" fill="currentColor"/></svg>
       <span>my decks</span>
@@ -38,9 +41,14 @@
     </button>
   </div>
 
+  <div id="netbar" role="alert" hidden><span class="nb-dot" aria-hidden="true"></span><span class="nb-t">can’t reach lumi. trying again…</span><button id="netretry" type="button" data-nosfx>try again now</button></div>
+
   <section id="loading" class="route" aria-label="getting ready"></section>
   <section id="home" class="route" aria-label="your decks"></section>
   <section id="editor" class="route" aria-label="deck editor"></section>
+  <section id="plan" class="route" aria-label="plan your deck"></section>
+  <section id="build" class="route" aria-label="build my deck"></section>
+  <section id="finalize" class="route" aria-label="finalize"></section>
 
   <section id="welcome" aria-label="welcome">
     <div class="w-left w-anim">
@@ -61,7 +69,7 @@
     </div>
   </section>
 
-  <section id="ask" aria-live="off">
+  <section id="ask">
     <div id="left">
       <div id="badge" class="badge"></div>
       <h1 id="headline" class="q"></h1>
@@ -92,6 +100,7 @@
   </section>
 </div>
 
+<div id="announce" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <div id="narrow" role="note">
   <svg viewBox="0 0 220 150" width="220" height="150" aria-hidden="true">
     <rect x="34" y="18" width="152" height="98" rx="12" fill="#f7f8fa"/>

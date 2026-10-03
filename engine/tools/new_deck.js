@@ -2,6 +2,11 @@
 // Start a new deck from the Aura template.
 //   node .aura/engine/tools/new_deck.js "<Deck title>" --theme pink-punch [--slug my-deck] [--kicker "Thesis defence"] [--force]
 // Creates .aura/temp/build/<slug>/index.html (runtime, theme, three.js import map already wired) and an assets/ folder.
+// A look with its own template (Bold Blue) starts from it, with the look's helper scripts wired in.
+//
+// Archetype slides (Bold Blue): print a ready slide with placeholder content to paste into the deck:
+//   node .aura/engine/tools/new_deck.js --snippet list
+//   node .aura/engine/tools/new_deck.js --snippet what-it-is --slide 3
 //
 // Give every editable text a stable id (run after writing or changing slides; safe to run any number of times):
 //   node .aura/engine/tools/new_deck.js --ids .aura/temp/build/<slug> [--check]
@@ -109,9 +114,33 @@ if (flag('ids')) {
   process.exit(checkOnly && (r.added || r.renamed) ? 3 : 0);
 }
 
+/* ---------------- archetype snippets (looks that have them: Bold Blue) ---------------- */
+const snippet = opt('snippet');
+if (snippet) {
+  const look = (opt('theme') || 'bold-blue').toLowerCase();
+  const n = parseInt(opt('slide') || '0', 10);
+  const dirA = path.join(ENGINE, 'deck', 'looks', look, 'archetypes');
+  if (!fs.existsSync(dirA)) { console.error('The ' + look + ' look has no archetype snippets.'); process.exit(1); }
+  const names = fs.readdirSync(dirA).filter(f => f.endsWith('.html')).map(f => f.slice(0, -5));
+  if (snippet === 'list') {
+    console.log('Archetypes for ' + look + ' (default story order: title-hero, problem-stats, what-it-is, process-film, comparison-twin, ' +
+      'annotated-photo, system-tour, result-chart, objectives-tour, closing):');
+    names.forEach(nm => { const head = /<!--\s*archetype:\s*([^>]*?)-->/.exec(fs.readFileSync(path.join(dirA, nm + '.html'), 'utf8'));
+      console.log('  ' + nm.padEnd(16) + (head ? head[1].split('|').slice(1).join('|').trim() : '')); });
+    console.log('Print one with: node .aura/engine/tools/new_deck.js --snippet <name> --slide <n>');
+    process.exit(0);
+  }
+  if (!names.includes(snippet)) { console.error('Unknown archetype "' + snippet + '". Use one of: ' + names.join(', ')); process.exit(1); }
+  if (!n) { console.error('Add --slide <n>: the slide number this snippet becomes (it names its text ids and scene id).'); process.exit(1); }
+  const pad = String(Math.max(1, n - 1)).padStart(2, '0');     // kickers count sections: the title slide has none
+  process.stdout.write(fs.readFileSync(path.join(dirA, snippet + '.html'), 'utf8').replace(/\{\{N\}\}/g, String(n))
+    .replace(/(class="kicker[^"]*"[^>]*>)\d\d ·/, '$1' + pad + ' ·'));
+  process.exit(0);
+}
+
 /* ---------------- new deck ---------------- */
 const force = flag('force');
-let theme = (opt('theme') || 'happy-headspace').toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+let theme = (opt("theme") || "bold-blue").toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
 const slugArg = opt('slug'), kicker = opt('kicker') || '';
 const title = args.join(' ').trim();
 
@@ -136,11 +165,22 @@ if (fs.existsSync(file) && !force) {
 fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
 const engineRel = path.relative(dir, path.join(root, '.aura', 'engine')).split(path.sep).join('/');
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const html = fs.readFileSync(path.join(ENGINE, 'deck', 'template.html'), 'utf8')
+// a look may bring its own helpers (Bold Blue: the 3D studio, the chart and the page-number chrome) and its own
+// starting slides; the deck is marked data-look so the checker applies that look's measured thresholds
+const LOOK_HEAD = {
+  'bold-blue': '<script src="{{ENGINE}}/deck/looks/bold-blue/bold-blue.js"></script>\n' +
+               '<script src="{{ENGINE}}/deck/looks/bold-blue/studio3d.js"></script>\n' +
+               '<script src="{{ENGINE}}/deck/looks/bold-blue/timeline.js"></script>\n' +
+               '<script src="{{ENGINE}}/deck/looks/bold-blue/physics.js"></script>\n',
+};
+const lookTemplate = path.join(ENGINE, 'deck', 'looks', theme, 'template.html');
+const html = fs.readFileSync(fs.existsSync(lookTemplate) ? lookTemplate : path.join(ENGINE, 'deck', 'template.html'), 'utf8')
+  .replace(/\{\{LOOK_HEAD\}\}/g, LOOK_HEAD[theme] || '')
   .replace(/\{\{ENGINE\}\}/g, engineRel).replace(/\{\{THEME\}\}/g, theme)
   .replace(/\{\{TITLE\}\}/g, esc(title)).replace(/\{\{KICKER\}\}/g, esc(kicker || THEMES[theme]));
 fs.writeFileSync(file, html, 'utf8');
 console.log('New deck: ' + path.relative(root, file).split(path.sep).join('/'));
 console.log('Theme: ' + THEMES[theme] + '  (rules: .aura/engine/deck/themes/' + theme + '.css)');
+if (theme === 'bold-blue') console.log('Bold Blue: follow .claude/skills/aura-slide/looks/bold-blue/LOOK.md (it overrides the form style choices).');
 console.log('Put pictures for the deck in: ' + relDir + '/assets');
 console.log('After writing the slides run: node .aura/engine/tools/new_deck.js --ids ' + relDir);

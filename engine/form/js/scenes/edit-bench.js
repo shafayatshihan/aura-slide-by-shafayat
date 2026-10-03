@@ -6,6 +6,7 @@
 // update({ editor: { count, selected } }) feeds it the deck; Claude events arrive on the bus (claude:event/state).
 import { PAL, clamp, lerp, damp, ease, rng, makeRoot, createLoop, createCanvas2D, rr, onBus } from './three-kit.js';
 import { bus as appBus, on } from '../bus.js';
+import { hasMarker } from '../markers.js';
 
 const BW = 400, BH = 200;                         // design space of the bench
 const DESK = { x0: 14, x1: 386, top: 118, depth: 50, front: 14 };
@@ -215,7 +216,7 @@ function drawLiftedCard(g, m, c, p) {
   if (tk >= 0 && tk < 2.6 && c.i + 1 === m.target) {
     const s = ease.outBack(clamp(tk * 3)) * clamp((2.6 - tk) * 2);
     g.save(); g.translate(p.w / 2 - 2, -p.h * p.fs / 2 + 2); g.scale(s, s);
-    g.fillStyle = C.ink; g.beginPath(); g.arc(0, 0, 11, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#5b3fa8'; g.beginPath(); g.arc(0, 0, 11, 0, Math.PI * 2); g.fill();
     g.strokeStyle = C.lilac; g.lineWidth = 2.6; g.lineCap = 'round'; g.lineJoin = 'round';
     g.beginPath(); g.moveTo(-4.5, .5); g.lineTo(-1.2, 4); g.lineTo(5, -3.5); g.stroke();
     g.restore();
@@ -264,7 +265,7 @@ function drawBubble(g, m, p) {
   if (m.wait < .02) return;
   const s = ease.outBack(m.wait), bx = p.x + p.w / 2 + 14, by = p.y - p.h * p.fs / 2 - 10 + (m.reduced ? 0 : Math.sin(m.t * 2.4) * 3);
   g.save(); g.translate(bx, by); g.scale(s, s);
-  g.fillStyle = C.ink; rr(g, -19, -16, 38, 32, 16); g.fill();
+  g.fillStyle = '#5b3fa8'; rr(g, -19, -16, 38, 32, 16); g.fill();
   poly(g, [[-10, 13], [-16, 24], [-1, 15]]); g.fill();
   g.fillStyle = C.pill; g.font = '900 20px Epilogue, "DM Sans", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('?', 0, 1);
   g.restore();
@@ -286,7 +287,7 @@ function drawLabels(g, m) {
     const sel = k === m.selected;
     if (!sel && (k % every) && k !== 1 && k !== n) continue;
     const y = DESK.top + DESK.depth + DESK.front / 2 - 1;
-    if (sel) { g.fillStyle = C.ink; rr(g, s.x - 11, y - 8, 22, 16, 8); g.fill(); g.fillStyle = C.pill; }
+    if (sel) { g.fillStyle = '#5b3fa8'; rr(g, s.x - 11, y - 8, 22, 16, 8); g.fill(); g.fillStyle = C.pill; }
     else g.fillStyle = 'rgba(8,9,9,.55)';
     g.fillText(String(k), s.x, y + .5);
   }
@@ -301,7 +302,7 @@ function drawPill(g, m) {
   g.fillStyle = col; g.beginPath(); g.arc(6 + 15, 6 + ph / 2, 5 + (key === 'work' && !m.reduced ? Math.sin(m.t * 5) : 0), 0, Math.PI * 2); g.fill();
   g.fillStyle = C.ink; g.fillText(text, 6 + 28, 6 + ph / 2 + 1);
   const ct = `${m.cards.length} slide${m.cards.length === 1 ? '' : 's'}`, cw = g.measureText(ct).width + 24;
-  g.fillStyle = C.ink; rr(g, BW - 6 - cw, 6, cw, ph, ph / 2); g.fill();
+  g.fillStyle = '#5b3fa8'; rr(g, BW - 6 - cw, 6, cw, ph, ph / 2); g.fill();
   g.fillStyle = C.pill; g.fillText(ct, BW - 6 - cw + 12, 6 + ph / 2 + 1);
 }
 function draw(g, m) {
@@ -320,8 +321,8 @@ function draw(g, m) {
 }
 
 // ---------------------------------------------------------------- Claude events -> bench actions
-// markers only count alone on their own line (contract section 8)
-const ASK = /^\s*\[\[aura:ask\]\]\s*$/m, DONE = /^\s*\[\[aura:done\b[^\n]*\]\]\s*$/m;
+// markers only count as whole lines, read by the one grammar in ../markers.js
+const ASK = { test: t => hasMarker(t, 'ask') }, DONE = { test: t => hasMarker(t, 'done') };
 function onClaudeEvent(m, ev, replay) {
   if (!ev || typeof ev !== 'object') return;
   const kind = ev.kind, text = String(ev.text || '');

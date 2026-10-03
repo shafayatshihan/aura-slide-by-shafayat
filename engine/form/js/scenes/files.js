@@ -90,7 +90,7 @@ export default {
     const badge = h('g', { transform: 'translate(430,196)' });
     const badgeIn = h('g', { class: 'fb' });
     const badgeT = h('text', { y: 6, 'font-size': 16, class: 'ep', 'text-anchor': 'middle', fill: C.pill });
-    badgeIn.append(h('circle', { r: 19, fill: C.ink }), badgeT);
+    badgeIn.append(h('circle', { r: 19, fill: '#5b3fa8' }), badgeT);
     badge.append(badgeIn);
     gulp.append(badge);
     const arrow = h('g', { class: 'arrow', transform: 'translate(330,96)' }, [h('g', { class: 'bob' }, [
@@ -183,7 +183,7 @@ export default {
         const name = short(clean(d.name) || 'file', 13, 150);
         const w = Math.max(120, Math.ceil(textWidth(name, 13)) + 66);
         const card = h('g', {}, [
-          h('rect', { x: -w / 2, y: -24, width: w, height: 48, rx: 24, fill: C.ink }),
+          h('rect', { x: -w / 2, y: -24, width: w, height: 48, rx: 24, fill: '#5b3fa8' }),
           h('g', { transform: `translate(${-w / 2 + 26},0) scale(.6)` }, [docIcon(kind)]),
           h('text', { x: -w / 2 + 50, y: 5, 'font-size': 13, fill: C.pill, text: name })]);
         fly.append(card);

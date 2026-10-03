@@ -45,7 +45,7 @@ export function initUsage(el) {
     show(v) {
       visible = !!v;
       clearInterval(timer);
-      if (visible) { refresh(); timer = setInterval(refresh, 30000); }
+      if (visible) { refresh(); timer = setInterval(() => { if (!document.hidden) refresh(); }, 30000); }
       el.hidden = !visible || !has;
     },
     refresh,

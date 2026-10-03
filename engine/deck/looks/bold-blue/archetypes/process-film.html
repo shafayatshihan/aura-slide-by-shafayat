@@ -1,0 +1,54 @@
+<!-- archetype: process-film | a sequence of states in one 3D "film" + a cycling card + a progress rail | main visual: 3D | companions: the card and the rail (inside the holder, recorded with the loop) -->
+<section class="slide" data-kind="content" data-minutes="2" data-title="The process">
+  <div class="safe">
+    <div class="bb-main stack">
+      <div class="bb-head">
+        <p class="kicker" data-edit="s{{N}}-1">04 · What happens</p>
+        <h2 class="headline" data-edit="s{{N}}-2">Five stages <span class="em">in one picture</span></h2>
+      </div>
+      <div class="bb-studio bb-stage">
+        <div class="aura-3d bb-3d" data-scene="s{{N}}-scene" data-period="40" role="img" aria-label="Describe the film: the object moves through each stage in turn.">
+          <div class="bb-cyc" data-edit="no"><span class="step">1 / 5</span><b class="name">Stage one</b><p class="desc">One line on what you see.</p><em class="badge">Key stage</em></div>
+          <div class="bb-glass bb-rail" data-edit="no"><span class="rl">Input <i>&rarr;</i></span><div class="tr"><b>1</b><b>2</b><b>3</b><b>4</b><b>5</b></div></div>
+        </div>
+      </div>
+    </div>
+    <footer class="bb-foot"><span class="bb-mark" data-edit="s{{N}}-3">Deck mark</span><span class="bb-pageno"></span></footer>
+  </div>
+  <aside class="notes" data-aura-notes>
+    <p>This plays like a short film. Let the first stage sit for a moment and say what drives the change from one stage to the next.</p>
+    <p>Read each card as it appears; each stage gets about eight seconds. Use the same stage names everywhere in the talk.</p>
+    <p>If asked whether the boundaries are sharp, say no: the stages blend, and the film shows the typical picture of each.</p>
+  </aside>
+</section>
+<script>
+(() => {
+  const STAGES = [
+    { name: 'Stage one', desc: 'One line on what you see.', color: '#63605D' },
+    { name: 'Stage two', desc: 'One line on what changes.', color: '#9A5700' },
+    { name: 'Stage three', desc: 'One line, the key stage.', color: '#0061EF', key: true },
+    { name: 'Stage four', desc: 'One line on what breaks.', color: '#5431A5' },
+    { name: 'Stage five', desc: 'One line on the end state.', color: '#C2320A' },
+  ];
+  const LENS = STAGES.map(() => 8);                         // seconds per stage; the loop period is their sum
+  Aura.scene('s{{N}}-scene', (ctx) => {
+    const { THREE } = ctx;
+    const S = BB3D.studio(ctx, { target: [0, 1.3, 0], distance: 9, azimuth: -20, elevation: 10, post: { bloom: true } });
+    const M = BB3D.materials(THREE);
+    S.add(BB3D.lathe(THREE, [[0, 0], [0.6, 0], [0.6, 2.4], [0, 2.4]], M.glass));
+    const fill = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1, 48), M.water); S.add(fill);
+    const card = ctx.el.querySelector('.bb-cyc'), dots = ctx.el.querySelectorAll('.bb-rail .tr b');
+    return S.api({ update(t) {
+      const g = BBTime.segments(t, LENS), st = STAGES[g.i];
+      S.orbit(t, { swayAz: 4 });
+      // the state itself changes stage by stage, and returns to stage one at t = period
+      const level = g.i === STAGES.length - 1 ? 1.6 * (1 - BBTime.ease.smooth(g.k)) + 0.2 : 0.2 + 0.4 * g.i + 0.4 * BBTime.ease.smooth(g.k);
+      fill.scale.y = level; fill.position.y = level / 2 + 0.05;
+      card.querySelector('.step').textContent = (g.i + 1) + ' / ' + STAGES.length;
+      card.querySelector('.name').textContent = st.name; card.querySelector('.desc').textContent = st.desc;
+      card.style.setProperty('--cyc', st.color); card.classList.toggle('key', !!st.key);
+      dots.forEach((d, i) => d.classList.toggle('on', i === g.i));
+    } });
+  }, { period: LENS.reduce((a, b) => a + b, 0) });
+})();
+</script>

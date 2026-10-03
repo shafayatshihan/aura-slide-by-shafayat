@@ -67,7 +67,7 @@ export const SCREENS = [
   screen('supervisor', 'People', 'people', 'who’s guiding you?', 'your supervisor or teacher, and where you study. skip anything that doesn’t apply.', [
     { type: 'text', key: 'people.supervisor', label: 'supervisor or teacher', placeholder: 'e.g. Dr. Jane Rahman' },
     { type: 'text', key: 'people.supervisorTitle', label: 'their title', placeholder: 'e.g. Professor, Dept. of EEE' },
-    { type: 'text', key: 'people.institution', label: 'university or institution', placeholder: 'e.g. BUET' },
+    { type: 'text', key: 'people.institution', label: 'university or institution', placeholder: 'e.g. Example University' },
     { type: 'text', key: 'people.department', label: 'department', placeholder: 'e.g. Mechanical Engineering' },
   ]),
 
@@ -116,18 +116,18 @@ export const SCREENS = [
     { type: 'toggle', key: 'style.threeD', label: '3d simulations', sub: 'models and scenes you can spin', icon: 'cube', on: 'yes', off: 'no', default: 'yes' },
     { type: 'toggle', key: 'style.twoD', label: '2d animations', sub: 'diagrams that move and build up', icon: 'wave', on: 'yes', off: 'no', default: 'yes' },
     { type: 'slider', key: 'style.amount', label: 'how much illustration and animation', min: 0, max: 100, default: 60 },
-    // Quality vs speed: the server turns this into Claude's model and effort (best = opus, balanced/fast = sonnet).
-    { type: 'seg', key: 'style.quality', label: 'quality or speed?', default: 'balanced', stack: true, options: [
-      { value: 'best', label: 'best quality · slower, uses more of your plan' },
-      { value: 'balanced', label: 'balanced · great slides at a good pace' },
-      { value: 'fast', label: 'fast · quickest, lightest on your plan' }] },
   ]),
-  screen('plan', 'The look', 'review', 'want to plan the slides?', 'claude can plan them for you, or you can sketch the order yourself.', [
-    { type: 'toggle', key: 'plan.auto', label: 'let claude plan them', sub: 'turn off to list the slides yourself', icon: 'wand', on: true, off: false, default: true },
-    { type: 'repeater', key: 'plan.slides', label: 'your slides', item: 'slide', min: 1, max: 60, perPage: 5, layout: 'slide', compact: true,
-      when: get => get('plan.auto') === false,
-      cols: [{ key: 'title', label: 'slide title', placeholder: 'slide title' }, { key: 'covers', label: 'covers', placeholder: 'what it covers' },
-             { key: 'file', label: 'file', type: 'file' }] },
+  // v0.5: quality picker. The server turns it into Claude's model and effort: best = opus/high (default), even better =
+  // opus/xhigh, maximum = opus/max (all three can fall back to sonnet), balanced = sonnet/high, fast = sonnet/low.
+  // (Planning the slides always runs on sonnet/high, whatever is picked here.) The old "plan the slides" screen is now
+  // the planning page after review.
+  screen('quality', 'The look', 'review', 'how careful should claude be?', 'more care means better slides, but it takes longer and uses more of your claude plan.', [
+    { type: 'seg', key: 'style.quality', label: 'quality', default: 'best', stack: true, options: [
+      { value: 'best', label: 'best · careful and polished (recommended)' },
+      { value: 'better', label: 'even better · thinks longer, slower' },
+      { value: 'maximum', label: 'maximum · thinks the longest, slowest' },
+      { value: 'balanced', label: 'balanced · good slides, quicker' },
+      { value: 'fast', label: 'fast · quickest, simplest slides' }] },
   ]),
 
   // ---- Your files (one screen per folder)
@@ -176,7 +176,7 @@ export const SCREENS = [
 ];
 
 // Defaults that live on component screens (no field spec to carry them).
-export const EXTRA_DEFAULTS = { 'look.theme': 'Claude chooses', 'style.amountLabel': 'Balanced' };
+export const EXTRA_DEFAULTS = { 'look.theme': 'Bold Blue', 'style.amountLabel': 'Balanced' };   // Bold Blue: recommended, pre-selected
 
 // Structural starting values (not "suggested" answers).
 export const INITIAL = { 'people.presenters': [{ name: '', id: '', role: '' }], 'work.results': [{ what: '', value: '' }] };

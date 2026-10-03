@@ -1,7 +1,8 @@
 // Lumi shell: scales the 1600x900 stage, walks the screens from steps.js, keeps the answers (local +
 // server autosave), and wires in the optional modules (gaze, cursor, audio, scenes, uploads, looks, workshop).
 // Every optional module is loaded defensively: if one is missing or throws, the app keeps working without it.
-import { bus, emit, on } from './bus.js';
+import { bus, emit, on, claudeNow, setClaude } from './bus.js';
+import { announce } from './a11y.js';
 import * as api from './api.js';
 import { mountScene } from './scenes/index.js';
 import { SCREENS, GROUPS, EXTRA_DEFAULTS, INITIAL, PHASES, amountLabel } from './steps.js';
@@ -24,7 +25,9 @@ let data = {};                 // the brief (contract section 5 keys)
 let touched = new Set();       // keys the person has changed (hides the "suggested" tag)
 let idx = 0, reached = 0;      // current screen, furthest screen reached
 let view = { offs: [] };       // what the current screen mounted
-let busy = false, interacted = false, claudeLive = false, scale = 1;
+let busy = false, interacted = false, scale = 1, finalRunning = false;
+// F-10: "is claude running" has one source of truth (bus.js claudeNow); the wizard asks it for the deck it is building
+const claudeLive = () => { const c = claudeNow(buildDeck); return c.running || c.waiting; };
 let scene = null, sceneName = '', sceneHost = null, sceneToken = 0;
 let gaze = null;
 // v0.3 routes: loading -> home -> (wizard: welcome ... review -> workshop) | editor
@@ -60,7 +63,7 @@ function applyDefaults() {
 }
 
 function persistLocal() {
-  try { localStorage.setItem(LS, JSON.stringify({ v: 2, data, touched: [...touched], screen: SCREENS[idx].id, reached, used: draftUsed, buildDeck, at: Date.now() })); } catch (e) {}
+  try { localStorage.setItem(LS, JSON.stringify({ v: 2, data, touched: [...touched], reached, used: draftUsed, buildDeck })); } catch (e) {}
 }
 function loadLocal() {
   try { const j = JSON.parse(localStorage.getItem(LS) || 'null'); if (j && j.v === 2 && j.data && typeof j.data === 'object') return j; } catch (e) {}
@@ -73,14 +76,14 @@ async function saveNow() {
   clearTimeout(saveTimer);
   const body = JSON.stringify(data);
   if (body === lastSaved) return true;
-  const r = await api.postJSON('/api/brief', data);
+  const r = await api.brief.save(data);
   if (r && r.ok !== false) { lastSaved = body; flashSaved(); return true; }
   return false;
 }
 function saveOnExit() {
   const body = JSON.stringify(data);
   if (!interacted || body === lastSaved) return;
-  try { fetch('/api/brief', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body }); } catch (e) {}
+  api.brief.saveOnExit(body);
 }
 
 let refreshQueued = false;
@@ -97,11 +100,11 @@ function scheduleRefresh() {
 
 // ---------------------------------------------------------------- optional modules
 const PATHS = { audio: './audio.js', gaze: './gaze.js', cursor: './cursor.js', uploads: './uploads.js', looks: './looks.js', workshop: './workshop.js',
-  loading: './loading.js', home: './home.js', editor: './editor.js' };
+  loading: './loading.js', home: './home.js', editor: './editor.js', plan: './plan.js', build: './editor.js', finalize: './finalizing.js' };
 const mods = {}, loading = {};
 function need(name) {
   return (loading[name] ||= import(PATHS[name]).then(m => (mods[name] = m),
-    e => { console.warn(`[aura] ${name}.js is not available, carrying on without it.`, e); return null; }));
+    e => { console.warn(`[aura] ${name}.js is not available, carrying on without it.`, e); delete loading[name]; return null; }));
 }
 const A = () => mods.audio && mods.audio.audio;
 function call(fn, ...args) { try { const a = A(); return a && typeof a[fn] === 'function' ? a[fn](...args) : undefined; } catch (e) { return undefined; } }
@@ -119,13 +122,34 @@ const sceneCtx = {
 };
 
 // ---------------------------------------------------------------- stage scaling
+// F-08 / F-01. The stage is a fixed 1600x900 design scaled to the window. Two rules keep it usable:
+//  - browser zoom works: zoom shrinks innerWidth by the zoom factor, which the old fit() cancelled out exactly (zoom was a
+//    no-op). The zoom factor is recovered from outerWidth/innerWidth and multiplied back in, so Ctrl+ makes things bigger.
+//  - it may scroll: the stage never shrinks below MIN_SCALE and, when zoomed in (or in a very small window), the page scrolls
+//    instead of clipping. "Nothing scrolls" is the normal case at a normal zoom, not a trap.
+// App text minimum (F-01, decided): 14 stage px for anything you read, 12 for pure micro-labels (counters, tags), nothing below 12; at MIN_SCALE that is still about 10 px on screen, and zoom or scrolling take it from there.
+const MIN_SCALE = 0.7;
+const ZOOMS = [1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
+function zoomLevel() {
+  const q = +new URLSearchParams(location.search).get('zoom');            // test hook: ?zoom=1.5 stands in for Ctrl+ at 150 %
+  if (q >= 1 && q <= 5) return q;
+  const r = outerWidth && innerWidth ? outerWidth / innerWidth : 1;
+  if (r < 1.07) return 1;
+  let best = 1;
+  for (const z of ZOOMS) if (Math.abs(z - r) < Math.abs(best - r)) best = z;
+  return Math.abs(r - best) / best < 0.07 ? best : 1;
+}
 function fit() {
-  scale = Math.min(innerWidth / W, innerHeight / H);
+  const z = zoomLevel();
+  scale = Math.max(Math.min(innerWidth / W, innerHeight / H) * z, MIN_SCALE);
+  const sw = W * scale, sh = H * scale, over = sw > innerWidth + 1 || sh > innerHeight + 1;
+  document.documentElement.classList.toggle('scrolls', over);
+  document.documentElement.dataset.zoom = String(z);
   stage.style.transform = `scale(${scale})`;
-  stage.style.left = Math.round((innerWidth - W * scale) / 2) + 'px';
-  stage.style.top = Math.round((innerHeight - H * scale) / 2) + 'px';
+  stage.style.left = Math.max(0, Math.round((innerWidth - sw) / 2)) + 'px';
+  stage.style.top = Math.max(0, Math.round((innerHeight - sh) / 2)) + 'px';
   const se = document.scrollingElement;
-  if (se) { se.scrollTop = 0; se.scrollLeft = 0; }
+  if (se && !over) { se.scrollTop = 0; se.scrollLeft = 0; }
 }
 
 // The small top-left wordmark doubles as the big centred one on the welcome screen (it glides between the two).
@@ -148,16 +172,7 @@ function setMode(mode) {
 }
 
 // ---------------------------------------------------------------- small UI helpers
-function el(tag, attrs = {}, ...kids) {
-  const n = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v == null || v === false) continue;
-    if (k === 'class') n.className = v; else if (k === 'html') n.innerHTML = v;
-    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v === true ? '' : v);
-  }
-  for (const k of kids.flat()) if (k != null && k !== false) n.append(k);
-  return n;
-}
+import { h as el } from './dom.js';
 
 let msgTimer = 0;
 function showMsg(text) {
@@ -180,9 +195,10 @@ function complain(bad) {
   if (bad.el && bad.el.focus) bad.el.focus({ preventScroll: true });
 }
 
-let savedTimer = 0;
+let savedTimer = 0, savedSaid = 0;
 function flashSaved() {
   const s = $('#saved');
+  if (Date.now() - savedSaid > 6000) { savedSaid = Date.now(); announce('saved'); }
   s.classList.add('show');
   clearTimeout(savedTimer); savedTimer = setTimeout(() => s.classList.remove('show'), 1600);
 }
@@ -237,7 +253,7 @@ function typed(t, quiet) {
     html: '<svg viewBox="0 0 20 20" width="14" height="14"><path d="M10 1c.8 5.4 2.6 7.2 8 8-5.4.8-7.2 2.6-8 8-.8-5.4-2.6-7.2-8-8 5.4-.8 7.2-2.6 8-8z"/></svg>' });
   s.style.left = (p.x - hr.left) / scale - 7 + 'px';
   s.style.top = (p.y - hr.top) / scale - 22 + 'px';
-  s.style.color = ['#d89cb3', '#b09fc7', '#f2a65a', '#c5b3d5'][Math.floor(Math.random() * 4)];
+  s.style.color = ['var(--pink)', 'var(--fur4)', 'var(--orange)', 'var(--fur3)'][Math.floor(Math.random() * 4)];
   p.host.append(s);
   const dx = (Math.random() - .5) * 18;
   s.animate([{ transform: 'translate(0,6px) scale(.2) rotate(0deg)', opacity: 0 }, { transform: `translate(${dx / 2}px,-4px) scale(1) rotate(25deg)`, opacity: 1, offset: .35 },
@@ -249,7 +265,7 @@ const fieldCtx = {
   set: setKey,
   isTouched: k => touched.has(k),
   sfx, typed, reduced,
-  files: () => api.getJSON('/api/files'),
+  files: () => api.files(),
 };
 
 // ---------------------------------------------------------------- left nav, counter, sound pill
@@ -274,6 +290,7 @@ function paintNav() {
     if (isCur) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
   });
 }
+function wizardTitle() { const h1 = $('#headline').textContent || (SCREENS[idx].mode === 'full' ? 'welcome' : ''); if (h1) titleFor('wizard', `${h1}${$('#counter').textContent ? ', ' + $('#counter').textContent : ''}`); }
 function paintCounter() {
   const s = SCREENS[idx];
   $('#counter').textContent = route !== 'wizard' || s.mode === 'full' ? '' : s.id === 'workshop' ? 'making it' : `${idx} of ${QUESTIONS}`;
@@ -293,21 +310,24 @@ function paintSound() {
 async function dropScene() {
   if (!sceneHost) return;
   const inst = scene, host = sceneHost, slow = sceneName === 'welcome';
-  scene = null; sceneHost = null; sceneName = ''; sceneToken++;
+  scene = null; sceneHost = null; sceneName = '';
   if (!reduced()) {
     await host.animate([{ opacity: 1 }, { opacity: 0 }], { duration: slow ? 640 : 220, easing: 'ease-in', fill: 'forwards' }).finished.catch(() => {});
   }
   if (inst) inst.destroy();
   host.remove();
 }
+// F-20: the token is taken FIRST, before the fade-out is awaited. A second call during the fade (a double "next", a held
+// Enter) takes a newer token, so the first call finds on waking that it was superseded and mounts nothing; before, both
+// mounted and the first one's instance was orphaned (a 60 fps WebGL loop and a stacked host for the rest of the session).
 async function switchScene(name) {
   if (name && name === sceneName) return;
+  const token = ++sceneToken;
   await dropScene();
-  if (!name) return;
+  if (token !== sceneToken || !name) return;
   const host = el('div', { class: 'scene-host' });
   (name === 'welcome' ? $('#welcomeLayer') : $('#illus')).append(host);
   sceneName = name; sceneHost = host;
-  const token = ++sceneToken;
   const inst = await mountScene(name, host, sceneCtx);
   if (token !== sceneToken) { inst.destroy(); host.remove(); return; }
   scene = inst;
@@ -358,7 +378,7 @@ async function buildUploads(s, host) {
   let n = 0;
   const label = () => setNext(n ? 'next' : 'skip');
   label();
-  api.getJSON('/api/files').then(g => {
+  api.files().then(g => {
     const grp = Array.isArray(g) ? g.find(x => x.folder === f.name) : null;
     n = grp ? (grp.files || []).length : 0;
     if (SCREENS[idx] === s) label();
@@ -397,7 +417,6 @@ function reviewRows() {
   const g = getKey, list = a => (Array.isArray(a) ? a.filter(Boolean) : []);
   const mins = g('audience.minutes'), qa = g('audience.qa');
   const names = list((g('people.presenters') || []).map(p => p && p.name && p.name.trim()));
-  const planned = list((g('plan.slides') || []).filter(x => x && (x.title || x.covers)));
   return [
     ['the talk', 'type', g('basics.type') === 'Other' ? g('basics.typeOther') : g('basics.type')],
     ['title', 'title', g('basics.title')],
@@ -408,7 +427,7 @@ function reviewRows() {
     ['look', 'look', (g('look.theme') || '').replace('Claude chooses', 'claude chooses')],
     ['style', 'style', `3d ${g('style.threeD') || 'yes'} · 2d ${g('style.twoD') || 'yes'} · ${(g('style.amountLabel') || 'balanced').toLowerCase()}`],
     ['files', 'files-1', '…'],
-    ['slides', 'plan', g('plan.auto') === false ? `${planned.length} planned by you` : 'claude plans them'],
+    ['quality', 'quality', ({ best: 'best (recommended)', better: 'even better', maximum: 'maximum', balanced: 'balanced', fast: 'fast' })[g('style.quality')] || 'best (recommended)'],
   ];
 }
 function buildReview(host) {
@@ -423,7 +442,7 @@ function buildReview(host) {
   }
   box.addEventListener('click', e => { const r = e.target.closest('.rv-row'); if (r) go(iOf(r.dataset.go), { check: false }); });
   host.append(box);
-  api.getJSON('/api/files').then(g => {
+  api.files().then(g => {
     const v = $('[data-files] .rv-value', box);
     if (!v || !Array.isArray(g)) { if (v) v.textContent = 'whatever is in your folders'; return; }
     const groups = g.filter(x => (x.files || []).length), n = groups.reduce((a, x) => a + x.files.length, 0);
@@ -502,6 +521,7 @@ async function go(to, { check = true, sound = true } = {}) {
   enter(dir, toFull);
   busy = false;
   focusFirst(s);
+  wizardTitle();
   emit('step:change', { from: from.id, to: s.id, step: s });
   sceneDone.catch(() => {});
   return true;
@@ -523,7 +543,7 @@ const next = () => {
   if (s.id === 'review') return makeSlides();
   if (s.id !== 'workshop') go(idx + 1);
 };
-const back = () => { if (idx > 0 && !(SCREENS[idx].id === 'workshop' && claudeLive)) go(idx - 1, { check: false }); };
+const back = () => { if (idx > 0 && !(SCREENS[idx].id === 'workshop' && claudeLive())) go(idx - 1, { check: false }); };
 
 function begin() {
   const at = reached >= 2 ? Math.min(reached, iOf('review')) : 1;
@@ -559,27 +579,27 @@ async function makeSlides() {
   $('.lbl', btn).textContent = 'getting ready…';
   sfx('launch');
   const saved = await saveNow();
-  if (!saved) {
-    btn.disabled = false; $('.lbl', btn).textContent = 'make my slides';
-    complain({ msg: 'couldn’t reach lumi. is its window still open?', el: btn });
-    return;
-  }
-  const st = await api.claude.status();
-  if (st && st.running) {
-    btn.disabled = false; $('.lbl', btn).textContent = 'make my slides';
-    complain({ msg: 'claude is still busy with another deck. try again when it’s done.', el: btn });
-    return;
-  }
-  const r = await api.claude.start();
   btn.disabled = false; $('.lbl', btn).textContent = 'make my slides';
+  if (!saved) { complain({ msg: 'couldn’t reach lumi. is its window still open?', el: btn }); return; }
+  // v0.5: the plan page asks "plan with claude (recommended)" or "skip, i'm in a hurry"
+  setRoute('plan', {});
+}
+
+// "skip, i'm in a hurry": the whole deck in one go (the v0.3 workshop), then the editor. Resolves true when started.
+async function startHurry(deckId) {
+  const st = await api.claude.status();
+  if (st && st.running) { showMsg('claude is still busy with another deck. try again when it’s done.'); sfx('error'); return false; }
+  const r = await api.claude.start(deckId || undefined);
   if (!r || r.ok === false) {
-    if (r && r.error === 'cli-missing') { buildDeck = null; go(iOf('workshop'), { check: false, sound: false }); return; }
-    complain({ msg: r && r.error === 'busy' ? 'claude is still busy with another deck. try again when it’s done.' : 'claude couldn’t start. try again in a moment.', el: btn });
-    return;
+    if (r && r.error === 'cli-missing') { buildDeck = null; await setRoute('wizard', { screen: 'workshop' }); return true; }
+    showMsg(r && r.error === 'busy' ? 'claude is still busy with another deck. try again when it’s done.' : 'claude couldn’t start. try again in a moment.');
+    sfx('error');
+    return false;
   }
-  buildDeck = r.deckId || null; draftUsed = true; claudeLive = true;
+  buildDeck = r.deckId || null; draftUsed = true; setClaude({ running: true, waiting: false, deckId: buildDeck });
   persistLocal();
-  go(iOf('workshop'), { check: false, sound: false });
+  await setRoute('wizard', { screen: 'workshop' });
+  return true;
 }
 
 function paintWorkshopText(d = {}) {
@@ -591,18 +611,24 @@ function paintWorkshopText(d = {}) {
 }
 
 // ---------------------------------------------------------------- welcome extras
-function startFresh(e) {
+async function startFresh(e) {
   const b = e.currentTarget;
   if (!b.dataset.armed) {
     b.dataset.armed = '1'; b.textContent = 'tap again to clear everything';
     setTimeout(() => { delete b.dataset.armed; b.textContent = 'start fresh'; }, 3200);
     return;
   }
+  // W-08: the old answers are copied to .aura/brief/brief-<time>.json first (the server keeps the newest ten)
+  b.disabled = true;
+  const kept = await api.brief.archive();
+  b.disabled = false;
+  if (kept && kept.ok === false && kept.error === 'offline') { showMsg('couldn’t reach lumi to keep a copy of your answers, so nothing was cleared.'); sfx('error'); delete b.dataset.armed; b.textContent = 'start fresh'; return; }
   try { localStorage.removeItem(LS); } catch (err) {}
   data = {}; touched = new Set(); reached = 0;
   applyDefaults(); persistLocal(); saveNow();
   delete b.dataset.armed; b.textContent = 'start fresh';
   sfx('pop'); paintWelcome(); paintNav();
+  if (kept && kept.kept) showMsg('cleared. your old answers are kept in the folder “.aura/brief”.');
 }
 
 // ---------------------------------------------------------------- global input
@@ -628,7 +654,12 @@ function wireInput() {
   const first = () => {
     if (interacted) return;
     interacted = true;
-    addEventListener('beforeunload', e => { saveOnExit(); e.preventDefault(); e.returnValue = ''; return ''; });
+    // W-03: "are you sure?" only when something would really be lost: answers not yet saved to lumi, claude working, or a finalize running
+    addEventListener('beforeunload', e => {
+      saveOnExit();
+      const risky = (route === 'wizard' && JSON.stringify(data) !== lastSaved) || claudeNow(buildDeck).running || finalRunning;
+      if (risky) { e.preventDefault(); e.returnValue = ''; return ''; }
+    });
     audio.start();
     paintSound();
   };
@@ -674,8 +705,29 @@ function wireInput() {
     paintSound();
   });
   on('audio:change', paintSound);
-  on('claude:state', d => { if (route !== 'wizard') return; claudeLive = !!(d && (d.running || d.waiting)); paintWorkshopText(d || {}); });
+  on('claude:state', d => { if (route !== 'wizard') return; paintWorkshopText(d || {}); });
+  on('finalize:state', d => { finalRunning = !!(d && d.running); });
   motionQ.addEventListener('change', () => stage.classList.toggle('reduced', reduced()));
+}
+
+// ---------------------------------------------------------------- F-19: one honest "can't reach lumi" state, everywhere
+// api.js decides (two failures in a row, or a request that hangs, flip it); this is the single bar every screen shares,
+// with a retry button and a quiet retry loop that backs off. Each screen's own polls recover by themselves once it clears.
+function wireNet() {
+  const bar = $('#netbar'), btn = $('#netretry');
+  let t = 0, tries = 0;
+  const loop = () => {
+    clearTimeout(t);
+    t = setTimeout(async () => { await api.ping(); if (!api.reachable()) loop(); }, Math.min(10000, 1500 * (1 + tries++)));
+  };
+  api.onReach(ok => {
+    bar.hidden = ok;
+    if (ok) { clearTimeout(t); tries = 0; announce('lumi is back'); } else { announce('can’t reach lumi, trying again'); loop(); }
+  });
+  btn.addEventListener('click', async () => { btn.disabled = true; tries = 0; await api.ping(); btn.disabled = false; });
+  // a quiet screen (home, nothing running) polls only every 15-30 s: if nothing at all has succeeded for a while, check
+  // that lumi is still there, so the bar appears within seconds and not at the next poll
+  setInterval(() => { if (!document.hidden && api.reachable() && api.idleMs() > 10000) api.ping(); }, 3000);
 }
 
 // ---------------------------------------------------------------- boot
@@ -687,13 +739,14 @@ async function boot() {
   $('#phases').replaceChildren(...PHASES.map((p, i) => el('li', {}, el('span', { class: 'ph-n' }, String(i + 1)), el('span', {}, p))));
   renderNav();
   wireInput();
+  wireNet();
 
   const saved = loadLocal();
   if (saved) {
     data = saved.data; touched = new Set(saved.touched || []); reached = saved.reached | 0;
     draftUsed = !!saved.used; buildDeck = saved.buildDeck || null;
   } else {
-    const b = await api.getJSON('/api/brief');
+    const b = await api.brief.get();
     if (b && typeof b === 'object' && b.ok !== false) {
       const { _savedAt, ok, ...rest } = b;
       // A brief saved from another browser: keep the answers; only treat it as progress if it has real ones.
@@ -701,7 +754,7 @@ async function boot() {
       // ...unless a deck was already built from this very brief: then it is not an unfinished draft.
       if (_savedAt) {
         const ds = await api.decks.list();
-        const built = ds && Array.isArray(ds.decks) && ds.decks.find(dk => dk.brief && dk.brief._savedAt === _savedAt);
+        const built = ds && Array.isArray(ds.decks) && ds.decks.find(dk => dk.briefSavedAt === _savedAt);
         if (built) { draftUsed = true; buildDeck = built.id; }
       }
     }
@@ -733,11 +786,11 @@ async function boot() {
 }
 
 // ---------------------------------------------------------------- v0.3 routes
-const ROUTE_MODE = { loading: 'full', home: 'home', editor: 'edit' };
+const ROUTE_MODE = { loading: 'full', home: 'home', editor: 'edit', plan: 'home', build: 'work', finalize: 'full' };
 function paintChrome() {
   const s = SCREENS[idx];
   $('#homeBtn').hidden = route !== 'wizard';
-  if (usagePill) usagePill.show(route === 'home' || route === 'editor' || (route === 'wizard' && s.id === 'workshop'));
+  if (usagePill) usagePill.show(route === 'home' || route === 'editor' || route === 'plan' || route === 'build' || (route === 'wizard' && s.id === 'workshop'));
 }
 async function fadeRoute(el, out) {
   if (reduced() || !el.animate) return;
@@ -754,6 +807,7 @@ async function setRoute(name, opts = {}) {
     if (prev === 'wizard') {
       await leave(1, SCREENS[idx].mode === 'full');
       teardownView();
+      sceneToken++;                                    // F-20: a scene still being mounted must not land on the next screen
       dropScene();
       partsFor(true).concat(partsFor(false)).forEach(p => p && p.getAnimations().forEach(a => a.cancel()));
     } else if (routeView || prev) {
@@ -773,8 +827,9 @@ async function setRoute(name, opts = {}) {
       paintNav(); paintCounter();
       busy = false;
       enter(1, s.mode === 'full');
-      switchScene(s.component === 'looks' ? null : s.scene);
+      switchScene(s.component === 'looks' ? null : s.scene).catch(e => console.warn('[aura] scene', e));
       focusFirst(s);
+      wizardTitle();
       emit('step:change', { from: prev, to: s.id, step: s });
       persistLocal();
     } else {
@@ -789,29 +844,67 @@ async function mountRoute(name, opts = {}) {
   paintCounter();
   const host = $('#' + name);
   const m = await need(name);
+  if (!m) { routeDown(host, name, opts); fadeRoute(host, false); return; }
   try {
     if (name === 'loading' && m) routeView = m.mountLoading(host, { audio, onDone: afterLoading });
     else if (name === 'home' && m) routeView = m.mountHome(host, { audio, update: updateInfo, onNew: () => newDeck({ fresh: true }), onResume: resumeDraft, onOpen: openFromHome,
-      draft: () => (!draftUsed && reached >= 2 ? { step: Math.min(reached, iOf('review')) } : null) });
-    else if (name === 'editor' && m) routeView = m.mountEditor(host, { deckId: opts.deckId, slide: opts.slide, audio, bus, sceneCtx, mountScene, onHome: goHome });
+      onFinalize: dk => openFinalize(dk.id), draft: () => (!draftUsed && reached >= 2 ? { step: Math.min(reached, iOf('review')) } : null) });
+    else if (name === 'editor' && m) routeView = m.mountEditor(host, { deckId: opts.deckId, slide: opts.slide, audio, bus, sceneCtx, mountScene, onHome: goHome, onFinalize: openFinalize });
+    else if (name === 'plan' && m) routeView = m.mountPlan(host, { deckId: opts.deckId || null, audio, setMode,
+      onStarted: id => { draftUsed = true; buildDeck = id; persistLocal(); },
+      onHurry: id => startHurry(id), onBuild: id => { draftUsed = true; buildDeck = id; persistLocal(); return openBuild(id); }, onHome: goHome });
+    else if (name === 'build' && m) routeView = m.mountEditor(host, { deckId: opts.deckId, audio, bus, sceneCtx, mountScene, onHome: goHome, onFinalize: openFinalize, build: true });
+    else if (name === 'finalize' && m) routeView = m.mountFinalizing(host, { deckId: opts.deckId, audio, onHome: goHome, onEdit: openEditor });
   } catch (e) { console.warn('[aura] could not open', name, e); }
   fadeRoute(host, false);
+  titleFor(name);
+  if (host) { host.tabIndex = -1; try { host.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
   emit('route:change', { route: name });
+}
+// F-14: every screen change updates the tab title and tells a screen reader where it is (focus lands on the screen itself)
+const ROUTE_TITLE = { loading: 'getting ready', home: 'your decks', editor: 'edit your deck', plan: 'plan your deck', build: 'build your deck', finalize: 'finalize your deck' };
+function titleFor(name, text) {
+  const t = text || ROUTE_TITLE[name] || '';
+  document.title = t ? `${t} · Lumi` : 'Lumi';
+  if (t) announce(t);
+}
+// F-19: a screen's module is fetched from the server the first time it is opened; if the server is away at that moment the
+// screen says so (never a blank page) and opens by itself when lumi is back.
+function routeDown(host, name, opts) {
+  const b = el('button', { type: 'button', class: 'pl-big pl-big-s1', 'data-nosfx': '' }, el('span', { class: 'pl-big-t' }, el('span', { class: 'pl-big-h' }, 'try again now')));
+  host.replaceChildren(el('div', { class: 'pl-wait route-down' }, el('h2', { class: 'pl-wait-h' }, 'can’t reach lumi. trying again…'),
+    el('p', { class: 'pl-wait-p' }, 'is its window still open? nothing you made is lost.'), el('div', { class: 'pl-bigs' }, b)));
+  let off = null;
+  const retry = () => { if (off) { off(); off = null; } if (route === name) mountRoute(name, opts); };
+  off = api.onReach(ok => { if (ok) retry(); });
+  b.addEventListener('click', async () => { b.disabled = true; await api.ping(); b.disabled = false; if (api.reachable()) retry(); });
+  routeView = { destroy() { if (off) off(); host.replaceChildren(); } };
 }
 async function afterLoading(info = {}) {
   updateInfo = info.update || null;
+  const fz = await api.finalize.status();
+  if (fz && fz.running && fz.deckId) return openFinalize(fz.deckId);
   const st = await api.claude.status();
   if (st && st.running && st.deckId) {
     const d = await api.decks.get(st.deckId);
+    if (d && d.deck && d.deck.flow === 'plan') return openFromHome(d.deck);
     if (d && d.deck && d.deck.exists) return openEditor(st.deckId);
-    buildDeck = st.deckId; claudeLive = true;
+    buildDeck = st.deckId; setClaude({ running: true, deckId: st.deckId });
     return setRoute('wizard', { screen: 'workshop' });
   }
   return setRoute('home');
 }
 function goHome() { return setRoute('home'); }
 function openEditor(deckId, slide) { if (!deckId) return goHome(); return setRoute('editor', { deckId, slide }); }
+function openPlan(deckId) { return setRoute('plan', { deckId }); }
+function openBuild(deckId) { return setRoute('build', { deckId }); }
+function openFinalize(deckId) { if (!deckId) return goHome(); return setRoute('finalize', { deckId }); }
+// A plan-flow deck opens where it stands: the plan, the build page, or (all built) the editor.
 function openFromHome(dk) {
+  if (dk.flow === 'plan') {
+    if (!dk.builtCount && dk.planState !== 'building') return openPlan(dk.id);
+    if (dk.builtCount < dk.planCount) return openBuild(dk.id);
+  }
   if (dk.exists) return openEditor(dk.id);
   buildDeck = dk.id;
   return setRoute('wizard', { screen: 'workshop' });
@@ -832,6 +925,7 @@ function resumeDraft() {
 
 // Tiny hook for tests and the integration step.
 window.__aura = { get state() { return data; }, get screen() { return SCREENS[idx].id; }, go: id => go(iOf(id), { check: false }), get busy() { return busy; },
-  get route() { return route; }, home: () => goHome(), edit: (id, n) => openEditor(id, n), newDeck: () => newDeck() };
+  get route() { return route; }, home: () => goHome(), edit: (id, n) => openEditor(id, n), newDeck: () => newDeck(),
+  plan: id => setRoute('plan', { deckId: id || null }), build: id => openBuild(id), finalize: id => openFinalize(id) };
 
 boot();

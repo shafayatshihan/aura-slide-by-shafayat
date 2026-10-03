@@ -258,7 +258,7 @@ export default {
     function setLabel(theme) {
       const auto = !LOOKS.includes(theme);
       lookP.set(auto ? `claude chooses ${DOT} ${current.toLowerCase()}` : `look: ${theme.toLowerCase()}`);
-      lookP.rect.setAttribute('fill', C.ink);
+      lookP.rect.setAttribute('fill', '#5b3fa8');
       dots.replaceChildren(...(auto ? LOOKS.map((l, i) => h('circle', { cx: (i - 2) * 14, r: 4, fill: l === current ? C.ink : C.f3 })) : []));
     }
 

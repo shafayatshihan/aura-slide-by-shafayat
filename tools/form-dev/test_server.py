@@ -6,7 +6,10 @@ Claude run (start, events, question, reply with --resume, stop), events survivin
 v0.3: quality flags on the command line, deck records (create / list / migrate / patch), deck-tied start and reply
 (session switching, [slide N] prefix), /deck/<id>/ serving, slide pictures (real render with Edge), direct text tweaks
 (patched in packed + build, 26 px rule rejection reverts both), usage capture, choice / hint markers, health checks and
-fixes (simulated failures, fake fix commands)."""
+fixes (simulated failures, fake fix commands).
+v0.5: quality picker flags, the clash matrix (strict page saves, lenient repairs of Claude plans), planning (one session,
+sonnet/high), quick re-plans (queued, neighbours flagged, doubts), slide-by-slide build (locks, questions, build the rest,
+stop), finalize (MP4 loops embedded, PDF stills + notes, cancel, changed since finalizing, older decks)."""
 import http.client, json, os, socket, subprocess, sys, time, traceback
 try: sys.stdout.reconfigure(encoding='utf-8', errors='replace'); sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 except Exception: pass
@@ -76,7 +79,8 @@ def raw(lines):
 def start_server(**env_extra):
     env = dict(os.environ, AURA_HOME=str(AURA), AURA_FAKE_CLAUDE=str(FAKE), AURA_NO_LAUNCH='1', AURA_FAKE_DELAY='0.03',
                AURA_NO_NETWORK='1', AURA_FAKE_FIX='1')
-    for k in ('AURA_LATEST_VERSION', 'AURA_HEALTH_FAIL', 'AURA_FAKE_PLAN', 'AURA_FAKE_FIX_FAIL'): env.pop(k, None)
+    for k in ('AURA_LATEST_VERSION', 'AURA_HEALTH_FAIL', 'AURA_FAKE_PLAN', 'AURA_FAKE_FIX_FAIL', 'AURA_FAKE_AUTH_FILE',
+              'AURA_FAKE_HELP_FAIL', 'AURA_FAKE_LOGGED_IN'): env.pop(k, None)
     for k in ('CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT'): env.pop(k, None)
     env.update({k: str(v) for k, v in env_extra.items()})
     p = subprocess.Popen([sys.executable, str(SERVER), '--port', str(PORT)], env=env, stdout=subprocess.DEVNULL,
@@ -111,12 +115,20 @@ def wait_run(timeout=40):
 
 def main():
     print(f'sandbox {SANDBOX}, port {PORT}')
-    subprocess.run([sys.executable, str(REPO / 'tools' / 'form-dev' / 'sandbox.py'), str(SANDBOX), '--reset'], check=True,
+    subprocess.run([sys.executable, str(REPO / 'tools' / 'form-dev' / 'sandbox.py'), str(SANDBOX), '--reset', '--no-venv'], check=True,
                    stdout=subprocess.DEVNULL)
     srv = start_server()
     try:
         run_main_suite()
         run_v3_suite()
+        run_v5_suite()
+        run_q8_suite()
+        import test_batch_c                 # FIXLOG batch C: retention, reconcile, recovery, pptx, finalize options
+        test_batch_c.run(sys.modules[__name__])
+        import test_batch_d                 # FIXLOG batch D: bin / archive, brief backup, uploads list, mid-build edits
+        test_batch_d.run(sys.modules[__name__])
+        import test_batch_e                 # FIXLOG batch E: stages, walls, pre-extraction, run file, hooks + checker in a browser
+        test_batch_e.run(sys.modules[__name__])
         print('\n[restart: events survive]')
         n_before = jget('/api/claude/status')[1].get('eventCount')
         sid_before = jget('/api/claude/status')[1].get('sessionId')
@@ -148,6 +160,8 @@ def main():
     run_health_suite()
     print('\n[idle shutdown]')
     run_idle_suite()
+    import test_instructions            # the instruction surface (markers, plan.json schema, step card, numbers): no server needed
+    test_instructions.run(check)
     passed = sum(1 for _, ok in results if ok)
     print(f'\n{passed}/{len(results)} checks passed')
     return 0 if passed == len(results) else 1
@@ -260,7 +274,7 @@ def run_main_suite():
 
     print('\n[brief round trip]')
     brief = {'basics': {'type': 'Thesis defence', 'title': 'Pulsating heat pipes', 'subtitle': 'Under vacuum'},
-             'people': {'presenters': [{'name': 'S. M. Shafayat Islam', 'id': 2110072, 'role': 'Presenter'}]},
+             'people': {'presenters': [{'name': 'A. B. Doe', 'id': 1000001, 'role': 'Presenter'}]},
              'audience': {'who': ['Teachers', 'Students'], 'level': 'Some background', 'minutes': 12},
              'work': {'results': [{'what': 'R_th drop', 'value': 38}]},
              'look': {'theme': 'Pink Punch'}, 'style': {'threeD': 'yes', 'twoD': 'no', 'amount': 75},
@@ -271,7 +285,7 @@ def run_main_suite():
     check('brief round trip', back.get('style') == brief['style'] and back.get('unknown') == {'kept': True} and back.get('_savedAt'))
     md = (AURA / 'brief' / 'brief.md').read_text(encoding='utf-8')
     for want in ('## Look and motion', '- **Theme:** Pink Punch', '- **3D simulations:** Yes', '- **2D animations:** No',
-                 '- **Amount of illustration and animation:** 75 / 100 (Rich)', 'S. M. Shafayat Islam - 2110072 - Presenter',
+                 '- **Amount of illustration and animation:** 75 / 100 (Rich)', 'A. B. Doe - 1000001 - Presenter',
                  'R_th drop - 38'):
         check(f'brief.md has {want!r}', want in md, md[:400])
     jpost('/api/brief', dict(brief, look={'theme': 'Claude chooses'}, style={'amount': 10}))
@@ -281,7 +295,7 @@ def run_main_suite():
     check('non-object JSON -> 400', req('POST', '/api/brief', b'[1,2]')[0] == 400)
     jpost('/api/brief', brief)   # leave the ask-me note in for the run below
 
-    print('\n[open-slides / open-vscode / login (no launch)]')
+    print('\n[open-slides / login (no launch)]')
     (SANDBOX / '4 - Your slides' / 'x.html').write_text('<p>x</p>', encoding='utf-8')
     check('open slides folder', jpost('/api/open-slides', {})[0] == 200)
     check('open deck inside slides', jpost('/api/open-slides', {'path': '4 - Your slides/x.html'})[0] == 200)
@@ -289,7 +303,7 @@ def run_main_suite():
     for bad in ('../3 - Put your files here/Report/hello.txt', '4 - Your slides/../.aura/aura.config.json',
                 str(SANDBOX / '.aura' / 'aura.config.json'), 'C:/Windows/notepad.exe', '4 - Your slides/../../x.html'):
         check(f'open-slides {bad[:40]!r} refused', jpost('/api/open-slides', {'path': bad})[0] in (403, 404))
-    check('open-vscode answers', jpost('/api/open-vscode')[0] in (200, 404))
+    check('open-vscode is gone (404)', jpost('/api/open-vscode')[0] == 404)
     check('login answers (no window in tests)', jpost('/api/claude/login')[0] == 200)
 
     print('\n[fake Claude run]')
@@ -320,9 +334,11 @@ def run_main_suite():
     check('user event recorded', tail[0]['text'] == 'Only on the title slide, please.')
     check('resume kept the session (--resume)', j.get('sessionId') == sid and any(sid[:8] in (e.get('text') or '') for e in tail), sid)
     check('finished ok with lastDeck', tail[-1]['kind'] == 'done' and tail[-1].get('ok') is True and
-          j.get('lastDeck') == '4 - Your slides/Pulsating heat pipes.html' and not j.get('waiting'), (tail[-1], j.get('lastDeck')))
-    check('deck written into 4 - Your slides', (SANDBOX / '4 - Your slides' / 'Pulsating heat pipes.html').is_file())
-    check('open the finished deck', jpost('/api/open-slides', {'path': j['lastDeck']})[0] == 200)
+          str(j.get('lastDeck')).endswith('/Pulsating heat pipes.html') and not j.get('waiting'), (tail[-1], j.get('lastDeck')))
+    check('v0.5: a one-go deck packs into its work folder, not 4 - Your slides',
+          str(j.get('lastDeck')).startswith('.aura/decks/') and (SANDBOX / j['lastDeck']).is_file() and
+          not (SANDBOX / '4 - Your slides' / 'Pulsating heat pipes.html').exists(), j.get('lastDeck'))
+    check('the editable deck cannot be opened from 4 - Your slides', jpost('/api/open-slides', {'path': j['lastDeck']})[0] in (403, 404))
 
     print('\n[stop]')
     s, _ = jpost('/api/claude/reply', {'text': 'take-your-time please'})
@@ -378,7 +394,10 @@ def run_v3_suite():
     check('best -> opus/high + sonnet fallback', fs.quality_flags('best') == ['--model', 'opus', '--effort', 'high', '--fallback-model', 'sonnet'])
     check('balanced -> sonnet/high', fs.quality_flags('balanced') == ['--model', 'sonnet', '--effort', 'high'])
     check('fast -> sonnet/low', fs.quality_flags('fast') == ['--model', 'sonnet', '--effort', 'low'])
-    check('unknown -> balanced', fs.quality_flags('ultra') == fs.quality_flags(None) == fs.quality_flags('balanced'))
+    check('better -> opus/xhigh + fallback', fs.quality_flags('better') == ['--model', 'opus', '--effort', 'xhigh', '--fallback-model', 'sonnet'])
+    check('maximum -> opus/max + fallback', fs.quality_flags('maximum') == ['--model', 'opus', '--effort', 'max', '--fallback-model', 'sonnet'])
+    check('unknown -> best (the default)', fs.quality_flags('ultra') == fs.quality_flags(None) == fs.quality_flags('best'))
+    check('planning quality is sonnet/high', fs.quality_flags(fs.PLAN_QUALITY) == ['--model', 'sonnet', '--effort', 'high'])
     brief = {'basics': {'title': 'Heat pipes v3'}, 'look': {'theme': 'Bold Blue'}, 'style': {'quality': 'best', 'amount': 60}}
     jpost('/api/brief', brief)
     md = (AURA / 'brief' / 'brief.md').read_text(encoding='utf-8')
@@ -431,7 +450,7 @@ def run_v3_suite():
     B = j.get('deckId')
     argv = fake_argv(ev)
     check('start without deckId makes a record', s == 200 and B and B != A and (AURA / 'decks' / f'{B}.json').is_file(), j)
-    check('default quality is balanced', flag(argv, '--model') == 'sonnet' and flag(argv, '--effort') == 'high', argv)
+    check('default quality is best (opus/high)', flag(argv, '--model') == 'opus' and flag(argv, '--effort') == 'high', argv)
     choice = '[[aura:choice id="q1" question="Which look?" options="Bold Blue|Flat-Pack|Claude chooses"]]'
     check('choice marker passes through untouched', any(e['kind'] == 'say' and choice in e['text'] for e in ev) and
           jget('/api/claude/status')[1].get('waiting') is True, [e['text'][:80] for e in ev if e['kind'] == 'say'])
@@ -439,7 +458,8 @@ def run_v3_suite():
     check('asking deck has a session but no file yet', recB.get('sessionId') and recB.get('status') == 'draft', recB)
     s, j, ev = run_and_wait('/api/claude/reply', {'deckId': B, 'text': 'Bold Blue'})
     recB = jget(f'/api/decks/{B}')[1].get('deck', {})
-    check('answer finishes the deck', recB.get('file') == '4 - Your slides/Ask deck.html' and recB.get('status') == 'ready', recB)
+    check('answer finishes the deck', recB.get('file') == f'.aura/decks/{B}/Ask deck.html' and recB.get('status') == 'ready' and
+          recB.get('flow') == 'hurry' and not recB.get('finalized'), recB)
     s, j, ev = run_and_wait('/api/claude/reply', {'deckId': A, 'text': 'back to the first deck'})
     check('switching decks resumes the right session', flag(fake_argv(ev), '--resume') == sessA and
           jget('/api/claude/status')[1].get('deckId') == A, flag(fake_argv(ev), '--resume'))
@@ -533,6 +553,428 @@ def run_v3_suite():
     check('status has deckId + subscriptionType', jget('/api/claude/status')[1].get('subscriptionType') == 'max')
 
 
+def plan_of(deck_id):
+    return jget(f'/api/decks/{deck_id}/plan')[1]
+
+
+def wait_plan_idle(deck_id, timeout=60):
+    """Until Claude is done with this deck and nothing is queued or re-planning."""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        j = plan_of(deck_id)
+        busy = j.get('running') or j.get('queued') or any(x.get('status') in ('queued', 'replanning')
+                                                          for x in (j.get('plan') or {}).get('slides') or [])
+        if not busy and not jget('/api/claude/status')[1].get('running'): return j
+        time.sleep(0.25)
+    return plan_of(deck_id)
+
+
+def heard(evs):
+    return [e['text'][len('[fake-heard] '):] for e in evs if e['kind'] == 'say' and e['text'].startswith('[fake-heard] ')]
+
+
+def events_from(n):
+    return jget(f'/api/claude/events?since={n}')[1].get('events', [])
+
+
+def save(deck_id, plan, replan=None):
+    return jpost(f'/api/decks/{deck_id}/plan', {'plan': plan, **({'replan': replan} if replan else {})})
+
+
+def run_v5_suite():
+    import form_server as fs
+    SLIDES = SANDBOX / '4 - Your slides'
+
+    print('\n[v0.5 clash matrix and word caps]')
+    check('3d + labels is fine', fs.clash_reason('3d', 'labels') == '')
+    check('chart + labels clashes with a plain reason', 'only works with a 3D model' in fs.clash_reason('chart', 'labels'))
+    check('two main pictures clash', 'one main picture' in fs.clash_reason('3d', 'chart'))
+    plan, probs, _ = fs.normalize_plan({'slides': [{'id': 's1', 'title': 'A', 'visual': {'main': 'chart', 'companions': ['labels']}}]}, strict=True)
+    check('strict save reports the clash', probs and probs[0]['error'] == 'clash' and probs[0]['item'] == 'labels', probs)
+    plan, probs, rep = fs.normalize_plan({'slides': [{'id': 's1', 'title': 'A', 'visual': {'main': ['3d', 'chart'], 'companions': ['labels', 'notes']}}]})
+    sl = plan['slides']
+    check('lenient: the second main picture gets its own slide', len(sl) == 2 and sl[0]['visual']['main'] == '3d' and
+          sl[1]['visual']['main'] == 'chart' and sl[0]['visual']['companions'] == ['labels'] and len(rep) == 2, (sl, rep))
+    check('3d gets detail + motion, others none', sl[0]['visual']['detail'] == 'detailed' and sl[0]['visual']['motion'] == 'timed' and
+          sl[1]['visual']['detail'] is None, sl)
+    check('word cap from hard-rules (Bold Blue 55, others default)', fs.word_cap('Bold Blue') == 55 and fs.word_cap('Pink Punch') == fs.DEFAULT_WORD_CAP)
+
+    print('\n[v0.5 planning]')
+    jpost('/api/brief', {'basics': {'title': 'Plan deck'}, 'look': {'theme': 'Bold Blue'}, 'style': {'quality': 'best'}})
+    n0 = jget('/api/claude/status')[1].get('eventCount', 0)
+    s, j = jpost('/api/plan/start', {})
+    P = j.get('deckId')
+    check('plan start makes a plan-flow deck', s == 200 and P and jget(f'/api/decks/{P}')[1]['deck'].get('flow') == 'plan', (s, j))
+    check('second start while planning -> 409', jpost('/api/plan/start', {})[0] == 409)
+    pj = wait_plan_idle(P)
+    argv = fake_argv(events_from(n0))
+    check('planning runs on sonnet/high, a new session', flag(argv, '--model') == 'sonnet' and flag(argv, '--effort') == 'high' and
+          '--resume' not in argv and '--fallback-model' not in argv, argv)
+    plan = pj.get('plan') or {}
+    ids = [x['id'] for x in plan.get('slides') or []]
+    check('plan ready with 11 slides (10 + one split)', pj.get('planState') == 'ready' and len(ids) == 11, (pj.get('planState'), ids))
+    s5 = next((x for x in plan['slides'] if x['id'] == 's5'), {})
+    check('Claude clash repaired: labels left out of the chart slide', s5.get('visual', {}).get('companions') == ['notes'], s5)
+    i6 = ids.index('s6')
+    check('Claude two mains split onto their own slides', plan['slides'][i6]['visual']['main'] == '3d' and
+          plan['slides'][i6 + 1]['visual']['main'] == 'chart' and plan.get('repairs'), plan['slides'][i6:i6 + 2])
+    doubts = plan.get('doubts') or []
+    check('doubts: one deck-wide, one for slide s3, each with a default', len(doubts) == 2 and
+          {d['scope'] for d in doubts} == {'deck', 'slide'} and any(d['slide'] == 's3' for d in doubts) and
+          all(d['default'] for d in doubts), doubts)
+    check('slide with a doubt is marked', next(x for x in plan['slides'] if x['id'] == 's3').get('status') == 'doubt')
+    check('word cap of the look in the payload', pj.get('wordCap') == 55, pj.get('wordCap'))
+    f = AURA / 'decks' / P / 'plan.json'
+    check('plan.json kept in the work folder', f.is_file() and len(json.loads(f.read_text(encoding='utf-8'))['slides']) == 11)
+    sessP = jget(f'/api/decks/{P}')[1]['deck'].get('sessionId')
+    check('planning session saved on the deck', bool(sessP))
+
+    bad = json.loads(json.dumps(plan)); bad['slides'][0]['visual'] = {'main': 'text', 'companions': ['labels']}
+    s, j = save(P, bad)
+    check('page save with a clash -> 400 + reason', s == 400 and j.get('error') == 'clash' and 'only works with' in j.get('reason', ''), j)
+    bad = json.loads(json.dumps(plan)); bad['slides'][0]['visual'] = {'main': '3d', 'companions': ['chart'], 'detail': 'simple', 'motion': 'still'}
+    s, j = save(P, bad)
+    check('page save with two main pictures -> 400', s == 400 and j.get('error') == 'clash', j)
+
+    print('\n[v0.5 quick re-plan]')
+    edit = json.loads(json.dumps(plan))
+    edit['slides'][1]['title'] = 'Problem neighbour'
+    n0 = jget('/api/claude/status')[1].get('eventCount', 0)
+    s, j = save(P, edit, ['s2'])
+    check('save + replan accepted', s == 200 and j.get('ok'), j)
+    pj = wait_plan_idle(P)
+    ev = events_from(n0)
+    argv = fake_argv(ev)
+    check('re-plan resumes the same session on sonnet/high', flag(argv, '--resume') == sessP and flag(argv, '--model') == 'sonnet', argv)
+    msg = ' '.join(heard(ev))
+    check('re-plan message names only that slide', '[plan-edit]' in msg and 's2 ("Problem neighbour")' in msg, msg[:300])
+    lc = pj['plan'].get('lastChange') or {}
+    s2 = next(x for x in pj['plan']['slides'] if x['id'] == 's2')
+    check('re-planned slide is all clear', s2.get('status') == 'clear' and s2.get('title') == 'Problem neighbour', s2)
+    check('affected neighbour flagged to flash', lc.get('targets') == ['s2'] and 's3' in lc.get('flash', []), lc)
+
+    plan = pj['plan']
+    n0 = jget('/api/claude/status')[1].get('eventCount', 0)
+    e1 = json.loads(json.dumps(plan)); e1['slides'][3]['point'] = 'first quick edit'
+    save(P, e1, ['s4'])
+    e2 = json.loads(json.dumps(e1)); e2['slides'][7]['point'] = 'second quick edit'
+    save(P, e2, [e2['slides'][7]['id']])
+    e3 = json.loads(json.dumps(e2)); e3['slides'][8]['point'] = 'third quick edit'
+    s, j = save(P, e3, [e3['slides'][8]['id']])
+    check('edits while Claude runs are queued', bool(j.get('queued')) or j.get('running'), (j.get('queued'), j.get('running')))
+    pj = wait_plan_idle(P)
+    users = [e['text'] for e in events_from(n0) if e['kind'] == 'user']
+    check('quick edits go together in one queued re-plan', len(users) <= 2 and any('2 slides' in u for u in users), users)
+    check('the user words survived the re-plan', [x['point'] for x in pj['plan']['slides']][7] == 'second quick edit', pj['plan']['slides'][7])
+
+    dk = next(d for d in pj['plan']['doubts'] if d['scope'] == 'deck')
+    n0 = jget('/api/claude/status')[1].get('eventCount', 0)
+    s, j = jpost(f'/api/decks/{P}/plan/answer', {'id': dk['id'], 'answer': 'Both', 'other': 'mostly examiners'})
+    pj = wait_plan_idle(P)
+    msg = ' '.join(heard(events_from(n0)))
+    dk2 = next(d for d in pj['plan']['doubts'] if d['id'] == dk['id'])
+    check('deck-wide answer goes to Claude', s == 200 and 'the whole deck' in msg and 'Both' in msg and 'mostly examiners' in msg, msg[:300])
+    check('answered doubt kept as answered', dk2.get('answer') == 'Both' and dk2.get('applied'), dk2)
+    check('bad answer -> 400', jpost(f'/api/decks/{P}/plan/answer', {'id': dk['id'], 'answer': 'Nope'})[0] == 400)
+
+    e = json.loads(json.dumps(pj['plan'])); e['slides'][9]['title'] = 'Limits doubt'
+    sid9 = e['slides'][9]['id']
+    save(P, e, [sid9])
+    pj = wait_plan_idle(P)
+    s9 = next(x for x in pj['plan']['slides'] if x['id'] == sid9)
+    check('a re-plan can come back with a new doubt card', s9.get('status') == 'doubt' and
+          any(d.get('slide') == sid9 and not d.get('answer') for d in pj['plan']['doubts']), s9)
+
+    s, j = jpost(f'/api/decks/{P}/plan/suggest', {'after': 's2'})
+    nid = j.get('newId')
+    pj = wait_plan_idle(P)
+    ids = [x['id'] for x in pj['plan']['slides']]
+    sg = next((x for x in pj['plan']['slides'] if x['id'] == nid), {})
+    check('"Claude, suggest one here" fills a new slide after s2', s == 200 and nid and ids.index(nid) == ids.index('s2') + 1 and
+          sg.get('title') == 'Suggested slide' and sg.get('status') == 'clear', (ids, sg))
+
+    e = json.loads(json.dumps(pj['plan']))
+    last = e['slides'].pop(); e['slides'].insert(1, last)                       # drag the last slide to place 2
+    dup = json.loads(json.dumps(e['slides'][2])); dup['id'] = 'copy-1'; e['slides'].insert(3, dup)   # duplicate
+    e['slides'] = [x for x in e['slides'] if x['id'] != 's10']                  # remove
+    s, j = save(P, e)
+    ids2 = [x['id'] for x in j.get('plan', {}).get('slides') or []]
+    check('reorder, duplicate and remove are saved', s == 200 and ids2[1] == last['id'] and 'copy-1' in ids2 and 's10' not in ids2, ids2)
+    check('no re-plan without replan ids', not j.get('queued') and not j.get('running'), j.get('queued'))
+
+    check('file name: colon becomes a dash, no underscore in words', fs.title_to_filename('Pulsating jets: a scramjet? "x"/y') == 'Pulsating jets - a scramjet x-y')
+    check('plan title beats the brief title', fs.deck_display_title({'title': 'Brief title', 'plan': {'title': 'Plan title', 'slides': []}}) == 'Plan title')
+    check('slide 1 title is the fallback', fs.deck_display_title({'title': 'Brief title', 'plan': {'slides': [{'title': 'First slide'}]}}) == 'First slide')
+    check('a title the user typed wins', fs.deck_display_title({'title': 'Mine', 'titleUser': True, 'plan': {'title': 'Plan title'}}) == 'Mine')
+    check('the deck record follows the plan title', jget(f'/api/decks/{P}')[1]['deck'].get('title') == plan.get('title'),
+          (jget(f'/api/decks/{P}')[1]['deck'].get('title'), plan.get('title')))
+    bm = fs.build_message({'id': P, 'plan': plan}, plan['slides'][0], 1, 3)
+    check('build message carries the step card: real design decisions, 3-6 for a 3D slide, stop mid-build on a doubt',
+          'STEP CARD' in bm and 'REAL design decisions' in bm and 'camera angle' in bm and 'written-out headline wordings' in bm and 'A REAL DOUBT WHILE BUILDING' in bm and 'ONLY where' not in bm)
+
+    print('\n[v0.5 build one slide at a time]')
+    e = json.loads(json.dumps(j['plan']))
+    e['slides'][1]['title'] = 'Problem ask-me'
+    e['slides'][2]['title'] = 'Results ask-deep'
+    save(P, e)
+    n0 = jget('/api/claude/status')[1].get('eventCount', 0)
+    s, j = jpost(f'/api/decks/{P}/build', {'mode': 'next'})
+    check('build next starts slide 1', s == 200 and j.get('n') == 1 and j.get('slide') == e['slides'][0]['id'], (s, j))
+    s2, j2 = jpost(f'/api/decks/{P}/build', {'mode': 'next'})
+    check('next is locked while Claude runs -> 409', s2 == 409 and j2.get('error') == 'busy', (s2, j2))
+    pj = wait_plan_idle(P)
+    ev = events_from(n0)
+    argv = fake_argv(ev)
+    check('building resumes the planning conversation with the deck quality', flag(argv, '--resume') == sessP and
+          flag(argv, '--model') == 'opus' and flag(argv, '--effort') == 'high', argv)
+    check('build message is per slide and per plan', any('[build-slide id=' in h and 'n=1 of=' in h and 'deck shell' in h for h in heard(ev)), heard(ev)[:1])
+    rec = jget(f'/api/decks/{P}')[1]['deck']
+    check('slide 1 built, editable deck in the work folder', pj.get('built') == 1 and pj['plan']['slides'][0].get('built') and
+          str(rec.get('file')).startswith(f'.aura/decks/{P}/') and rec.get('status') == 'ready' and not rec.get('finalized'), rec.get('file'))
+    check('nothing went to 4 - Your slides', not (SLIDES / 'Plan deck.html').exists())
+    e = json.loads(json.dumps(pj['plan'])); e['slides'][0]['title'] = 'changed after building'
+    s, j = save(P, e)
+    check('a built slide cannot change on the plan -> 409', s == 409 and j.get('error') == 'built', (s, j))
+    e = json.loads(json.dumps(pj['plan'])); e['slides'][5]['point'] = 'tweaked in the coming-up popup'
+    s, j = save(P, e, [e['slides'][5]['id']])
+    check('an unbuilt slide can be saved, the plan is binding (no re-plan)', s == 200 and not j.get('queued') and not j.get('running') and
+          j['plan']['slides'][5]['point'] == 'tweaked in the coming-up popup', (s, j.get('queued')))
+    # W-01: a new slide may be suggested after the build started, anywhere after the built slides; the person can remove it again
+    s, j = jpost(f'/api/decks/{P}/plan/suggest', {'after': 's2'})
+    check('suggest after the build started is allowed behind the built slides (W-01)', s == 200 and j.get('newId'), (s, j.get('error')))
+    pj = wait_plan_idle(P)
+    e = json.loads(json.dumps(pj['plan'])); e['slides'] = [x for x in e['slides'] if x['id'] != j.get('newId')]
+    s2_, j2_ = save(P, e)
+    check('...and removed again; the built slide and the rest are untouched', s2_ == 200 and len(j2_['plan']['slides']) == len(pj['plan']['slides']) - 1, (s2_, j2_.get('error')))
+
+    s, j = jpost(f'/api/decks/{P}/build', {'mode': 'next'})
+    pj = wait_plan_idle(P)
+    check('Claude asks during a build step: slide stays unbuilt', pj.get('built') == 1 and pj.get('waiting') and
+          pj.get('buildTarget') == pj['plan']['slides'][1]['id'], (pj.get('built'), pj.get('waiting'), pj.get('buildTarget')))
+    evq = ' '.join(str(e.get('text', '')) for e in jget('/api/claude/events?since=0')[1]['events'])
+    check('the build-time question offers a 3D scene choice and a detail choice, then ends the turn with ask',
+          'Which real thing should the 3D picture' in evq and 'id="q2"' in evq.split('Which real thing')[1] and '[[aura:ask]]' in evq.split('Which real thing')[1])
+    s, j = jpost('/api/claude/reply', {'deckId': P, 'text': 'q1: The whole vehicle in flight'})
+    # (answer text goes back as plain lines)
+    pj = wait_plan_idle(P)
+    check('the answer finishes that slide', pj.get('built') == 2 and not pj.get('buildTarget'), (pj.get('built'), pj.get('buildTarget')))
+
+    # four design questions up front, one more midway, answers resume the same run to completion
+    n_ev = len(jget('/api/claude/events?since=0')[1]['events'])
+    s, j = jpost(f'/api/decks/{P}/build', {'mode': 'next'})
+    pj = wait_plan_idle(P)
+    deep = pj['plan']['slides'][2]['id']
+    allev = jget('/api/claude/events?since=0')[1]['events'][n_ev:]
+    evt = ' '.join(str(x.get('text', '')) for x in allev if x.get('kind') == 'say')
+    check('deep slide: four questions up front, waiting, slide unbuilt', pj.get('waiting') and pj.get('built') == 2 and pj.get('buildTarget') == deep and
+          all(f'id="q{i}"' in evt for i in (1, 2, 3, 4)) and evt.count('[[aura:choice') == 4, (pj.get('waiting'), pj.get('built'), evt.count('[[aura:choice')))
+    s409, j409 = jpost(f'/api/decks/{P}/build', {'mode': 'next'})
+    check('make next slide stays locked while questions are open', s409 == 409 and pj.get('waiting'), (s409, j409))
+    sess_before = jget('/api/claude/status')[1].get('sessionId')
+    n_ev2 = len(jget('/api/claude/events?since=0')[1]['events'])
+    jpost('/api/claude/reply', {'deckId': P, 'text': 'q1: A cut-open combustor\nq2: Why the jet pulses\nq3: A timed fuel pulse\nq4: Right, large'})
+    pj = wait_plan_idle(P)
+    ev2 = jget('/api/claude/events?since=0')[1]['events'][n_ev2:]
+    evt2 = ' '.join(str(x.get('text', '')) for x in ev2 if x.get('kind') == 'say')
+    check('midway doubt: the slide started, then stopped again with one question (still unbuilt, still locked)',
+          pj.get('waiting') and pj.get('built') == 2 and pj.get('buildTarget') == deep and 'Raise the camera' in evt2 and evt2.count('[[aura:choice') == 1 and
+          '[[aura:built' not in evt2 and jpost(f'/api/decks/{P}/build', {'mode': 'next'})[0] == 409, (pj.get('waiting'), pj.get('built'), evt2[:200]))
+    argv2 = fake_argv(ev2)
+    check('the answers resume the same conversation (--resume): the one this slide runs in (a large earlier conversation is handed off, L-17)',
+          flag(argv2, '--resume') and flag(argv2, '--resume') == jget(f'/api/decks/{P}')[1]['deck'].get('sessionId'), argv2)
+    time.sleep(1.5)
+    check('no default timer answers the question', plan_of(P).get('waiting') and plan_of(P).get('built') == 2)
+    jpost('/api/claude/reply', {'deckId': P, 'text': 'q1: Add a rim light'})
+    pj = wait_plan_idle(P)
+    check('the midway answer finishes the same slide', pj.get('built') == 3 and not pj.get('buildTarget') and not pj.get('waiting'), (pj.get('built'), pj.get('waiting')))
+
+    s, j = jpost(f'/api/decks/{P}/build', {'mode': 'rest'})
+    check('build the rest starts', s == 200 and jget(f'/api/decks/{P}')[1]['deck'].get('buildRest') is True, (s, j))
+    t0 = time.time()
+    while plan_of(P).get('built', 0) < 4 and time.time() - t0 < 30: time.sleep(0.1)
+    s, j = jpost(f'/api/decks/{P}/build', {'mode': 'stop'})
+    pj = wait_plan_idle(P)
+    kept = pj.get('built')
+    time.sleep(1.5)
+    check('stop ends "build the rest" and keeps the finished slides', s == 200 and not pj.get('buildRest') and kept >= 4 and
+          plan_of(P).get('built') == kept and not jget('/api/claude/status')[1].get('running'), (kept, pj.get('buildRest')))
+    s, j = jpost(f'/api/decks/{P}/build', {'mode': 'rest'})
+    t0 = time.time()
+    while plan_of(P).get('planState') != 'built' and time.time() - t0 < 90: time.sleep(0.3)
+    pj = wait_plan_idle(P)
+    check('build the rest finishes every slide by itself', pj.get('planState') == 'built' and pj.get('built') == pj.get('count') and
+          not pj.get('buildRest'), (pj.get('planState'), pj.get('built'), pj.get('count')))
+    check('build next when all built -> 409', jpost(f'/api/decks/{P}/build', {'mode': 'next'})[1].get('error') == 'all-built')
+    check('bad build mode -> 400', jpost(f'/api/decks/{P}/build', {'mode': 'turbo'})[0] == 400)
+
+    print('\n[v0.5 finalize]')
+    s, j = jpost(f'/api/decks/{P}/finalize', {})
+    check('finalize starts', s == 200 and j.get('started'), (s, j))
+    check('a second finalize while one runs -> 409', jpost(f'/api/decks/{P}/finalize', {})[0] == 409)
+    seen = set()
+    t0 = time.time()
+    while time.time() - t0 < 180:
+        st = jget('/api/finalize')[1]
+        seen.add(st.get('phase'))
+        if not st.get('running'): break
+        time.sleep(0.2)
+    check('finalize reports progress (recording, pdf)', {'record', 'pdf'} & seen, seen)
+    check('finalize finished ok', st.get('ok') is True and st.get('final'), st)
+    rec = jget(f'/api/decks/{P}')[1]['deck']
+    fin = rec.get('final') or {}
+    html_f, pdf_f = SANDBOX / fin.get('html', 'x'), SANDBOX / fin.get('pdf', 'x')
+    check('final HTML + PDF in 4 - Your slides, editable stays in .aura', html_f.is_file() and pdf_f.is_file() and
+          html_f.parent == SLIDES and str(rec.get('file')).startswith('.aura/decks/'), (fin, rec.get('file')))
+    import base64, re as _re
+    txt = html_f.read_text(encoding='utf-8') if html_f.is_file() else ''
+    blobs = _re.findall(r'<script type="text/plain" id="lumi-loop-(\d+)" data-mime="video/mp4" data-period="([0-9.]+)">([A-Za-z0-9+/=]+)</script>', txt)
+    mp4 = base64.b64decode(blobs[0][2]) if blobs else b''
+    check('every loop carries its period', blobs and all(float(b[1]) == 0.5 for b in blobs), [b[:2] for b in blobs])
+    n3d = sum(1 for x in pj['plan']['slides'] if x['visual']['main'] == '3d')
+    check('every 3D slide is embedded as an MP4 loop', len(blobs) == n3d and n3d > 0 and mp4[4:8] == b'ftyp', (len(blobs), n3d))
+    check('the MP4 is H.264 with faststart (moov before mdat)', b'avc1' in mp4[:4000] and 0 <= mp4.find(b'moov') < mp4.find(b'mdat'), mp4[:64])
+    import struct
+    i = mp4.find(b'tkhd')
+    wh = (struct.unpack('>I', mp4[i + 80:i + 84])[0] >> 16, struct.unpack('>I', mp4[i + 84:i + 88])[0] >> 16) if i > 0 else None
+    check('the loop is recorded at the holder rect (640x300), not the full slide', wh == (640, 300), wh)
+    pages = len(_re.findall(rb'/Type\s*/Page(?![s\w])', pdf_f.read_bytes())) if pdf_f.is_file() else 0
+    check('PDF: one page per slide + one notes page per slide', pages == 2 * pj.get('count'), (pages, pj.get('count')))
+    check('deck shows as finalized, not changed', rec.get('finalized') and not rec.get('changedSinceFinalize'), rec)
+    lst = [d for d in jget('/api/decks')[1]['decks'] if d.get('file') == fin.get('html')]
+    check('the final file is not adopted as a new deck', not lst, lst)
+
+    t = rec.get('file')
+    s, j = jpost(f'/api/decks/{P}/text', {'editId': 's1-t2', 'text': 'Edited after finalize'})
+    rec = jget(f'/api/decks/{P}')[1]['deck']
+    check('a change after finalizing marks the deck "changed since finalizing"', s == 200 and j.get('ok') and rec.get('changedSinceFinalize'), (j, rec.get('changedSinceFinalize')))
+    old_bytes = html_f.read_bytes()
+    jpost(f'/api/decks/{P}/finalize', {})
+    time.sleep(0.4)
+    s, j = jpost('/api/finalize/cancel', {})
+    t0 = time.time()
+    while jget('/api/finalize')[1].get('running') and time.time() - t0 < 30: time.sleep(0.2)
+    st = jget('/api/finalize')[1]
+    check('cancel stops finalize and keeps the old final', st.get('phase') == 'cancelled' and html_f.read_bytes() == old_bytes and
+          not list((AURA / 'decks' / P).glob('final.part.*')), st)
+    jpost(f'/api/decks/{P}/finalize', {})
+    t0 = time.time()
+    while jget('/api/finalize')[1].get('running') and time.time() - t0 < 180: time.sleep(0.3)
+    rec = jget(f'/api/decks/{P}')[1]['deck']
+    check('finalize again: new final in place, changed flag cleared', jget('/api/finalize')[1].get('ok') and
+          'Edited after finalize' in html_f.read_text(encoding='utf-8') and not rec.get('changedSinceFinalize'), rec.get('final'))
+
+    print('\n[v0.5 finalize an older deck]')
+    legacy = next((d for d in jget('/api/decks')[1]['decks'] if str(d.get('file') or '').startswith('4 - Your slides/') and d.get('exists')), None)
+    if legacy:
+        lf = legacy['file']
+        jpost(f"/api/decks/{legacy['id']}/finalize", {})
+        t0 = time.time()
+        while jget('/api/finalize')[1].get('running') and time.time() - t0 < 180: time.sleep(0.3)
+        rec = jget(f"/api/decks/{legacy['id']}")[1]['deck']
+        check('older deck: editable copy moves to its work folder, final takes its name', jget('/api/finalize')[1].get('ok') and
+              str(rec.get('file')).startswith(f".aura/decks/{legacy['id']}/") and
+              (rec.get('final') or {}).get('html') == f"4 - Your slides/{rec.get('title')}.html", (rec.get('file'), rec.get('final')))
+        check('its old editable copy left 4 - Your slides (or became the final)', not (SANDBOX / lf).is_file() or
+              (rec.get('final') or {}).get('html') == lf, lf)
+        n = len(jget('/api/decks')[1]['decks'])
+        check('no deck record is made for the final file', len(jget('/api/decks')[1]['decks']) == n and
+              not any(d.get('migrated') and d.get('file') == (rec.get('final') or {}).get('html') for d in jget('/api/decks')[1]['decks']))
+        check('older deck now packs into its work folder on the next Claude run', fs.uses_work_folder(rec) or str(rec.get('file')).startswith('.aura/decks/'))
+    else:
+        check('an older deck exists to finalize', False, 'none')
+    check('finalize unknown deck -> 404', jpost('/api/decks/nope123/finalize', {})[0] == 404)
+
+
+def run_q8_suite():
+    """Question windows: dependent variants (when / depends), the slide context of a question, Enter never submits, no ideas or
+    chat while Claude works. The page's own behaviour (steps, docking, the game) is walked with Playwright, see RESUME.md."""
+    import form_server as fs
+    print('\n[questions: variants, slide context, no auto-submit, ideas gating]')
+    # markers.js (the page's parser) under node: attributes, variants and the when evaluation
+    js = REPO / 'engine' / 'form' / 'js' / 'markers.js'
+    probe = (f"import {{ parseMarkers, parseWhen, whenMatches }} from {json.dumps(js.as_uri())};"
+             "const t = [`[[aura:choice id=\"q1\" slide=3 question=\"H?\" options=\"A one|B two|C three\" default=\"B two\"]]`,"
+             "`[[aura:choice id=\"q2\" slide=\"3\" when=\"q1=1\" depends=\"q1\" question=\"W1?\" options=\"a|b\" multi=\"yes\" default=\"a\"]]`,"
+             "`[[aura:choice id=\"q2\" slide=\"3\" when=\"q1=B two\" question=\"W2?\" options=\"c|d\"]]`,"
+             "`[[aura:choice id=\"q3\" question=\"Plain?\" options=\"x|y|z|1|2|3|4|5\" default=\"x\"]]`].join('\\n');"
+             "const m = parseMarkers(t);"
+             "const ans = (id, sel, opts) => ({ [id]: { selected: sel, options: opts } });"
+             "console.log(JSON.stringify({ n: m.choices.length, ids: [...new Set(m.choices.map(c => c.id))], slide: m.choices[0].slide, opts8: m.choices[3].options.length,"
+             " dep: m.choices[1].depends, when2: m.choices[2].when, byNum: whenMatches(parseWhen('q1=1'), ans('q1', ['A one'], ['A one','B two','C three'])),"
+             " byText: whenMatches(parseWhen('q1=B two'), ans('q1', ['B two'], ['A one','B two','C three'])),"
+             " no: whenMatches(parseWhen('q1=3'), ans('q1', ['B two'], ['A one','B two','C three'])),"
+             " two: whenMatches(parseWhen('q1=1|2 & q3=x'), { ...ans('q1', ['B two'], ['A one','B two','C three']), ...ans('q3', ['x'], ['x','y']) }),"
+             " unanswered: whenMatches(parseWhen('q9=1'), {}) }));")
+    r = subprocess.run(['node', '--no-warnings', '--input-type=module', '-e', probe], capture_output=True, text=True, timeout=30)
+    try: o = json.loads(r.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError): o = {'err': r.stderr[-300:]}
+    check('markers.js: variants share an id and are told apart by their when', o.get('n') == 4 and o.get('ids') == ['q1', 'q2', 'q3'] and o.get('when2') == 'q1=B two', o)
+    check('markers.js: slide and depends are read, up to 8 options', o.get('slide') == '3' and o.get('dep') == ['q1'] and o.get('opts8') == 8, o)
+    check('when matches by 1-based number, by option text, with alternatives and conditions; wrong or missing answers do not',
+          o.get('byNum') is True and o.get('byText') is True and o.get('no') is False and o.get('two') is True and o.get('unanswered') is False, o)
+    free = (REPO / 'engine' / 'form' / 'js' / 'markers.js').read_text(encoding='utf-8')
+    plan_js = (REPO / 'engine' / 'form' / 'js' / 'plan.js').read_text(encoding='utf-8')
+    ws_js = (REPO / 'engine' / 'form' / 'js' / 'workshop.js').read_text(encoding='utf-8')
+    check('no question text box submits on Enter (markers.js, plan.js doubt card)',
+          "free.addEventListener('keydown', e => { if (e.key === 'Enter') e.stopPropagation(); })" in free and 'send.click()' not in free and
+          "free.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); })" in plan_js and 'send.click()' not in plan_js)
+    check('ideas are gated on idle (workshop.js), the chat box waits while claude works or a question is open',
+          'const ideasOk = () => !running && !elsewhere && !pendingCard()' in ws_js and 'hintRow.hidden = !ok' in ws_js and
+          "if (running || elsewhere || pendingCard()) { sfx('error'); return; }" in ws_js and 'const canReply = open && (hasRun() || EDIT) && !asking' in ws_js)
+
+    print('\n[plan doubts with variants]')
+    jpost('/api/brief', {'basics': {'title': 'Doubt deck'}, 'look': {'theme': 'Bold Blue'}, 'style': {'quality': 'best'}, 'extra': {'notes': 'many-doubts'}})
+    s, j = jpost('/api/plan/start', {})
+    Q = j.get('deckId')
+    pj = wait_plan_idle(Q)
+    ds = pj['plan'].get('doubts') or []
+    q4 = [d for d in ds if d.get('key') == 'q4']
+    check('plan doubts keep key, when and depends; variants get their own ids', len(q4) == 3 and len({d['id'] for d in q4}) == 3 and
+          [d['when'] for d in q4] == ['q3=1', 'q3=Friendly', 'q3=3'] and all(d['depends'] == ['q3'] for d in q4), q4)
+    check('a plain doubt has an empty when', all(d.get('when') == '' for d in ds if d.get('key') in ('q1', 'q2', 'q3')), [(d.get('key'), d.get('when')) for d in ds])
+    q3 = next(d for d in ds if d.get('key') == 'q3')
+    s, j = jpost(f'/api/decks/{Q}/plan/answer', {'id': q3['id'], 'answer': 'Friendly'})
+    pj = wait_plan_idle(Q)
+    left = [d for d in pj['plan']['doubts'] if d.get('key') == 'q4']
+    check('answering q3 keeps only the variant that matches (Friendly) and drops the others', s == 200 and [d['when'] for d in left] == ['q3=Friendly'], left)
+    check('when_holds / parse_when (server side)', fs.parse_when('q1=2 & q3=Left|Right') == [('q1', ['2']), ('q3', ['Left', 'Right'])] and
+          fs.when_holds([('q1', ['2'])], {'q1': (['B'], ['A', 'B'])}) and not fs.when_holds([('q1', ['1'])], {'q1': (['B'], ['A', 'B'])}) and
+          not fs.when_holds([('q1', ['1'])], {}))
+
+    print('\n[build-time questions: seven with variants, slide context]')
+    e = json.loads(json.dumps(pj['plan']))
+    e['slides'][2]['title'] = 'Results ask-seven'
+    e['slides'][3]['title'] = 'Slow slide take-your-time'
+    save(Q, e)
+    for _ in range(2):
+        jpost(f'/api/decks/{Q}/build', {'mode': 'next'}); wait_plan_idle(Q)
+    n0 = jget('/api/claude/status')[1].get('eventCount', 0)
+    jpost(f'/api/decks/{Q}/build', {'mode': 'next'})
+    pj = wait_plan_idle(Q)
+    txt = ' '.join(str(x.get('text', '')) for x in events_from(n0) if x.get('kind') == 'say')
+    check('seven questions, three variants of q2 and of q4, ask last', pj.get('waiting') and txt.count('[[aura:choice') == 11 and
+          txt.count('id="q2"') == 3 and txt.count('id="q4"') == 3 and 'when="q1=2"' in txt and 'slide="3"' in txt and txt.rstrip().endswith('[[aura:ask]]'),
+          (txt.count('[[aura:choice'), txt[-80:]))
+    tg = pj.get('target') or {}
+    sl3 = pj['plan']['slides'][2]
+    check('the plan payload carries the slide the question is about (number, title, point, bullets, picture, files, built)',
+          tg.get('n') == 3 and tg.get('id') == sl3['id'] and tg.get('title') == 'Results ask-seven' and tg.get('point') == sl3.get('point') and
+          tg.get('bullets') == sl3.get('bullets') and (tg.get('visual') or {}).get('main') == sl3['visual']['main'] and
+          tg.get('sources') == sl3.get('sources') and tg.get('built') is False, tg)
+    s409, _ = jpost(f'/api/decks/{Q}/build', {'mode': 'next'})
+    check('next slide stays locked while the questions are open', s409 == 409)
+    s, j = jpost('/api/claude/reply', {'deckId': Q, 'text': 'q1: Fuel in, thrust out\nq2: Fuel\nq3: One injector close-up\nq4: Macro close-up\nq5: Nothing, a still\nq6: Left, large\nq7: Orange'})
+    pj = wait_plan_idle(Q)
+    check('the answers finish the slide (one line per active question)', pj.get('built') == 3 and not pj.get('waiting') and
+          not pj.get('target'), (pj.get('built'), pj.get('waiting')))
+    s, j = jpost(f'/api/decks/{Q}/build', {'mode': 'next'})
+    time.sleep(0.8)
+    sr, jr = jpost('/api/claude/reply', {'deckId': Q, 'text': 'make the title shorter'})
+    check('a chat message while claude works is refused, not queued -> 409 busy', s == 200 and sr == 409 and jr.get('error') == 'busy', (s, sr, jr))
+    jpost(f'/api/decks/{Q}/build', {'mode': 'stop'})
+    wait_plan_idle(Q)
+
+
 def run_health_suite():
     srv = start_server()
     try:
@@ -572,6 +1014,8 @@ def run_health_suite():
         j = jget('/api/health')[1]
         checks = {c['id']: c for c in j.get('checks') or []}
         check('free plan -> premium message', checks['signin']['ok'] is False and 'Pro, Max or Team' in checks['signin']['label'], checks['signin'])
+        check('free plan is a warning, not a blocker', checks['signin'].get('blocking') is False and checks['signin'].get('free') is True,
+              checks['signin'])
         check('newer release -> update offered', checks['version']['ok'] is False and checks['version'].get('fix') == 'update' and
               '9.9.0' in checks['version']['label'], checks['version'])
         check('simulated failure gets its fix', checks['modules']['ok'] is False and checks['modules'].get('fix') == 'npm', checks['modules'])
@@ -581,6 +1025,61 @@ def run_health_suite():
         while jget('/api/fix/status')[1].get('running') and time.time() - t0 < 20: time.sleep(0.2)
         st = jget('/api/fix/status')[1]
         check('failing fix reported', st.get('ok') is False and st.get('name') == 'pip' and st.get('message'), st)
+    finally:
+        stop_server(srv)
+    print('  [claude first: sign-in, switch account]')
+    auth = AURA / 'temp' / 'fake-auth.txt'
+    auth.parent.mkdir(parents=True, exist_ok=True)
+    auth.write_text('0')
+    srv = start_server(AURA_FAKE_AUTH_FILE=auth)
+    try:
+        s, j = jget('/api/health?part=claude')
+        checks = {c['id']: c for c in j.get('checks') or []}
+        check('part=claude asks only claude + sign-in', s == 200 and set(checks) == {'claude', 'signin'}, list(checks))
+        check('signed out -> blocking sign-in with its fix', checks['signin']['ok'] is False and checks['signin'].get('fix') == 'signin'
+              and checks['signin'].get('blocking') is True and not checks['signin'].get('free'), checks['signin'])
+        check('sign-in starts', jpost('/api/fix/signin')[0] == 200)
+        t0, ok = time.time(), False
+        while time.time() - t0 < 20 and not ok:
+            time.sleep(0.5)
+            ok = any(c['id'] == 'signin' and c['ok'] for c in jget('/api/health?part=claude')[1].get('checks') or [])
+        check('polling sees the sign-in finish', ok)
+        s, j = jpost('/api/claude/logout')
+        check('switch account: logout signs out', s == 200 and j.get('ok') and j.get('signedIn') is False, j)
+        check('status says signed out after logout', jget('/api/claude/status?refresh=1')[1].get('signedIn') is False)
+        check('logout foreign origin -> 403', jpost('/api/claude/logout', headers={'Origin': 'http://evil.example'})[0] == 403)
+    finally:
+        stop_server(srv)
+        auth.unlink(missing_ok=True)
+    print('  [claude fixes and explains a failing check]')
+    def help_run(body):
+        s, j = jpost('/api/fix/claude', body)
+        t0 = time.time()
+        while jget('/api/fix/status')[1].get('running') and time.time() - t0 < 30: time.sleep(0.2)
+        return s, j, jget('/api/fix/status')[1]
+    srv = start_server(AURA_HEALTH_FAIL='modules')
+    try:
+        bad = {'check': 'modules', 'label': 'Slide tools need installing', 'detail': 'Missing: three'}
+        check('claude fix without a check -> 400', jpost('/api/fix/claude', {})[0] == 400)
+        s, j, st = help_run(bad)
+        check('claude fix starts', s == 200 and j.get('name') == 'claude-fix', j)
+        check('claude fix ran, check still failing -> not ok with its reason', st.get('name') == 'claude-fix' and st.get('ran') is True
+              and st.get('ok') is False and 'NOT FIXED' in st.get('message', '') and st.get('check') == 'modules', st)
+        s, j, st = help_run(dict(bad, mode='explain', tried='npm install failed'))
+        check('claude explains in plain words', st.get('name') == 'claude-explain' and st.get('ok') is True and
+              'Repair' in st.get('message', '') and chr(10) not in st.get('message', ''), st)
+        s, j = jpost('/api/fix/repair')
+        check('repair without the launcher -> friendly 404', s == 404 and j.get('error') == 'launcher-missing', j)
+        (AURA / 'Lumi.exe').write_bytes(b'MZ not really')
+        check('repair with the launcher (no launch in tests)', jpost('/api/fix/repair')[0] == 200)
+        (AURA / 'Lumi.exe').unlink()
+    finally:
+        stop_server(srv)
+    srv = start_server(AURA_HEALTH_FAIL='modules', AURA_FAKE_HELP_FAIL='1')
+    try:
+        s, j, st = help_run({'check': 'modules', 'mode': 'explain'})
+        check('claude cannot run -> reported, so the page shows repair', st.get('ran') is False and st.get('ok') is False and
+              st.get('message'), st)
     finally:
         stop_server(srv)
 

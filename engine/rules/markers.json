@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "note": "The Lumi marker grammar: the ONE machine-readable definition of every [[aura:...]] line. Python (engine/aura_markers.py) loads this file; the browser (engine/form/js/markers.js) carries a copy that tools/form-dev/test_instructions.py asserts is identical, and both parsers are run against tools/form-dev/marker_cases.json. The prose version for Claude is the 'App markers' section of .claude/skills/aura-slide/SKILL.md.",
+  "line": "A marker is ONE whole line: [[aura:<name>]] , [[aura:<name>=<value>]] or [[aura:<name> key=value key=\"value\" ...]]. Leading/trailing spaces are fine; any other text on the line makes it 'not-alone'. A value is \"double quoted\" (no quote, line break or ]] inside) or a bare token of letters, digits, '.', '_' or '-'. Attribute order is free; a repeated attribute: the last one wins.",
+  "stages": ["read", "plan", "build", "check", "export", "done"],
+  "limits": {"options": 8, "questionChars": 200, "optionChars": 60, "whenChars": 200},
+  "markers": {
+    "stage": {"form": "value", "values": "stages", "emittedBy": "Claude (progress, SKILL.md steps, planning, building, editing)", "consumedBy": "browser: workshop.js (progress bar, scenes), editor.js (status line); server: none"},
+    "ask": {"required": [], "optional": [], "emittedBy": "Claude, last line of a turn that waits for the person (build questions, editor questions, the first-build flow; never while planning)", "consumedBy": "server: Runner (waiting / asked, blocks the next build step); browser: workshop.js, scenes"},
+    "done": {"required": ["path"], "optional": [], "emittedBy": "Claude, last line when a deck is built or changed", "consumedBy": "server: Runner._deck_from (which file is the deck); browser: workshop.js, scenes (finished state)"},
+    "choice": {"required": ["id", "question", "options"], "optional": ["multi", "default", "slide", "scope", "when", "depends"], "emittedBy": "Claude: build-time design questions, editor questions, planning doubts", "consumedBy": "browser: markers.js choiceCard (build popup, editor chat); server: parse_doubts (planning doubts shown on the plan page)"},
+    "hint": {"required": ["slide", "text"], "optional": [], "emittedBy": "Claude, 3-5 after a build or edit (1-3 per built slide in the build flow)", "consumedBy": "browser: workshop.js suggestion chips; server: none"},
+    "plan": {"required": [], "optional": ["path"], "emittedBy": "Claude, very last line of a planning run ([plan-mode], [plan-edit])", "consumedBy": "server: after_run -> ingest_plan (the path is informational: the plan is always .aura/decks/<id>/plan.json)"},
+    "plan-ok": {"required": ["slide"], "optional": [], "emittedBy": "Claude, one per re-planned slide that raises no doubt ([plan-edit])", "consumedBy": "server: ingest_plan (the slide's pill turns 'all clear')"},
+    "built": {"required": ["slide"], "optional": [], "emittedBy": "Claude, second-to-last line of a [build-slide] step (before done)", "consumedBy": "server: after_run (marks the slide built, unlocks the next step)"}
+  }
+}

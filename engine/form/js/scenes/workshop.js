@@ -10,10 +10,11 @@
 // flat 2.5D canvas renderer that uses the same orthographic tilt, so both look the same. A canvas overlay carries the
 // small pills (stage, slide count) and the waiting bubble in both modes.
 import {
-  PAL, clamp, lerp, damp, smooth, ease, rng, makeRoot, loadThree, createRenderer, createLoop, addStudioLights,
+  PAL, clamp, lerp, damp, ease, rng, makeRoot, loadThree, createRenderer, createLoop, addStudioLights,
   createKit, disposeTree, createCanvas2D, rr, onBus, roundedSlab, heartShape, sparkleShape,
 } from './three-kit.js';
 import { bus as appBus, on } from '../bus.js';
+import { scanMarkers } from '../markers.js';
 
 const DW = 660, DH = 390;                       // design size of #illus
 const TILT = 24 * Math.PI / 180, COS = Math.cos(TILT), SIN = Math.sin(TILT);
@@ -121,11 +122,10 @@ function onClaudeEvent(m, ev, replay) {
   if (kind === 'say') {
     const mm = text.match(/(\d{1,2})\s+slides?/i);
     if (mm && !m.planned) m.planned = clamp(+mm[1], 1, 30);
-    const re = /^\s*\[\[aura:stage=(\w+)\]\]\s*$/gm;     // markers count only alone on their line
-    let s;
-    while ((s = re.exec(text))) setStage(m, s[1].toLowerCase(), replay);
-    if (/^\s*\[\[aura:done\b[^\n]*\]\]\s*$/m.test(text)) celebrate(m, replay);
-    if (/^\s*\[\[aura:ask\]\]\s*$/m.test(text) && !m.finished) m.waiting = true;
+    const found = scanMarkers(text).markers;               // one grammar for every reader (../markers.js)
+    for (const mk of found) if (mk.name === 'stage') setStage(m, mk.attrs.value, replay);
+    if (found.some(mk => mk.name === 'done')) celebrate(m, replay);
+    if (found.some(mk => mk.name === 'ask') && !m.finished) m.waiting = true;
     if (replay && m.finished) m.fan = 1;
     return;
   }
@@ -569,8 +569,13 @@ function create2D(root) {
 }
 
 // ---------------------------------------------------------------- 3D renderer
+// createRenderer() allocates a WebGL context; if building the scene throws, release it here (nothing else can).
 function create3D(THREE, root, onEvict) {
   const gl = createRenderer(THREE, root, { maxPixels: 1.4e6, onEvict });
+  try { return build3D(THREE, root, onEvict, gl); } catch (e) { try { gl.dispose(); } catch (e2) { /* ignore */ } throw e; }
+}
+
+function build3D(THREE, root, onEvict, gl) {
   gl.canvas.style.zIndex = '1';
   const kit = createKit(THREE);
   const scene = new THREE.Scene();
@@ -845,8 +850,9 @@ function create3D(THREE, root, onEvict) {
       gl.renderer.render(scene, camera);
     },
     dispose() {
+      disposeTree(scene);   // traverse the cards too, before detaching them
       cardMeshes.forEach(e => scene.remove(e.grp)); cardMeshes.clear();
-      disposeTree(scene); kit.dispose(); gl.dispose();
+      kit.dispose(); gl.dispose();
     },
   };
 }

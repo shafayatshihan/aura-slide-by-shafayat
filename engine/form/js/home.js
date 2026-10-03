@@ -1,49 +1,39 @@
 // Home: the deck library. A big "make a new deck" card on the left, then one card per deck from GET /api/decks
 // (thumbnail, title, date, look badge, status, edit · present · folder), six to a page so nothing ever scrolls.
-// mountHome(el, { audio, onNew, onResume, onOpen(deck), draft() -> {step}|null, update }) -> { destroy(), refresh() }
+// mountHome(el, { audio, onNew, onResume, onOpen(deck), onFinalize(deck), draft() -> {step}|null, update }) -> { destroy(), refresh() }
+// v0.5: "present" plays only the finalized file; a deck never finalized says "not finalized yet · finalize", one changed
+// since then "changed since finalizing · finalize again" (both are buttons). Plan-flow decks show planning / building.
 import * as api from './api.js';
+import { startUpdate } from './update.js';
+import { openDialog, roving, syncTab } from './a11y.js';
 
 const PER_PAGE = 6;
-function h(tag, attrs = {}, ...kids) {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v == null || v === false) continue;
-    if (k === 'class') e.className = v; else if (k === 'html') e.innerHTML = v;
-    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
-  }
-  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
-  return e;
-}
-const SVG = {
-  plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>',
-  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>',
-  folder: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2.2h7.4a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
-  pen: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 16l1-4 8-8 3 3-8 8zM11.5 5.5l3 3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/></svg>',
-  left: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  right: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-};
+import { h } from './dom.js';
+import { ICON } from './dom.js';
+const SVG = { plus: ICON.plus, play: ICON.play, folder: ICON.folder, pen: ICON.pen, left: ICON.left, right: ICON.rright,
+  user: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M5 19.5c1.2-3.4 3.8-5 7-5s5.8 1.6 7 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>' };
 // The new-deck card's little drawing: a blank slide on a stand, a pencil and sparkles.
 const NEW_ART = `<svg viewBox="0 0 220 130" aria-hidden="true" class="hm-new-art">
-  <ellipse cx="110" cy="122" rx="78" ry="6" fill="#c9c3ef" opacity=".35"/>
-  <path d="M104 96l-12 26M116 96l12 26" stroke="#9281b0" stroke-width="5" stroke-linecap="round"/>
-  <g class="hm-sheet"><rect x="42" y="14" width="136" height="84" rx="12" fill="#f7f8fa"/>
-  <rect x="58" y="32" width="60" height="9" rx="4.5" fill="#080909"/><rect x="58" y="49" width="84" height="6" rx="3" fill="#c5b3d5"/>
-  <rect x="58" y="61" width="66" height="6" rx="3" fill="#c5b3d5"/><circle cx="150" cy="70" r="14" fill="#d89cb3"/>
-  <path d="M144 70.5l4.5 4.5 7.5-8.5" fill="none" stroke="#080909" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
-  <g class="hm-pencil"><rect x="176" y="20" width="10" height="58" rx="3" fill="#f2a65a" transform="rotate(28 181 49)"/>
-  <path d="M168.5 75.5l9.5 5-1-10.5z" fill="#080909"/><rect x="184" y="16" width="10" height="9" rx="2" fill="#d89cb3" transform="rotate(28 189 20)"/></g>
-  <path class="hm-spark s1" d="M30 30c.8 5 2.4 6.6 7.4 7.4-5 .8-6.6 2.4-7.4 7.4-.8-5-2.4-6.6-7.4-7.4 5-.8 6.6-2.4 7.4-7.4z" fill="#c9c3ef"/>
-  <path class="hm-spark s2" d="M196 92c.6 3.6 1.8 4.8 5.4 5.4-3.6.6-4.8 1.8-5.4 5.4-.6-3.6-1.8-4.8-5.4-5.4 3.6-.6 4.8-1.8 5.4-5.4z" fill="#f2a65a"/>
+  <ellipse cx="110" cy="122" rx="78" ry="6" fill="var(--lilac)" opacity=".35"/>
+  <path d="M104 96l-12 26M116 96l12 26" stroke="var(--fur5)" stroke-width="5" stroke-linecap="round"/>
+  <g class="hm-sheet"><rect x="42" y="14" width="136" height="84" rx="12" fill="var(--pill)"/>
+  <rect x="58" y="32" width="60" height="9" rx="4.5" fill="var(--accent)"/><rect x="58" y="49" width="84" height="6" rx="3" fill="var(--fur3)"/>
+  <rect x="58" y="61" width="66" height="6" rx="3" fill="var(--fur3)"/><circle cx="150" cy="70" r="14" fill="var(--pink)"/>
+  <path d="M144 70.5l4.5 4.5 7.5-8.5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <g class="hm-pencil"><rect x="176" y="20" width="10" height="58" rx="3" fill="var(--orange)" transform="rotate(28 181 49)"/>
+  <path d="M168.5 75.5l9.5 5-1-10.5z" fill="#5d4a7e"/><rect x="184" y="16" width="10" height="9" rx="2" fill="var(--pink)" transform="rotate(28 189 20)"/></g>
+  <path class="hm-spark s1" d="M30 30c.8 5 2.4 6.6 7.4 7.4-5 .8-6.6 2.4-7.4 7.4-.8-5-2.4-6.6-7.4-7.4 5-.8 6.6-2.4 7.4-7.4z" fill="var(--lilac)"/>
+  <path class="hm-spark s2" d="M196 92c.6 3.6 1.8 4.8 5.4 5.4-3.6.6-4.8 1.8-5.4 5.4-.6-3.6-1.8-4.8-5.4-5.4 3.6-.6 4.8-1.8 5.4-5.4z" fill="var(--orange)"/>
 </svg>`;
 const EMPTY_ART = `<svg viewBox="0 0 300 180" aria-hidden="true">
-  <rect x="40" y="40" width="150" height="92" rx="14" fill="#e4d3e8" transform="rotate(-6 115 86)"/>
-  <rect x="96" y="28" width="160" height="98" rx="14" fill="#f7f8fa"/>
-  <rect x="114" y="48" width="70" height="10" rx="5" fill="#c5b3d5"/><rect x="114" y="66" width="104" height="7" rx="3.5" fill="#e4d3e8"/>
-  <rect x="114" y="80" width="84" height="7" rx="3.5" fill="#e4d3e8"/><circle cx="226" cy="100" r="13" fill="#c9c3ef"/>
-  <path d="M60 150h200" stroke="#c9c3ef" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 12"/>
-  <circle cx="270" cy="34" r="6" fill="#d89cb3"/><circle cx="34" cy="120" r="4" fill="#f2a65a"/>
+  <rect x="40" y="40" width="150" height="92" rx="14" fill="var(--fur1)" transform="rotate(-6 115 86)"/>
+  <rect x="96" y="28" width="160" height="98" rx="14" fill="var(--pill)"/>
+  <rect x="114" y="48" width="70" height="10" rx="5" fill="var(--fur3)"/><rect x="114" y="66" width="104" height="7" rx="3.5" fill="var(--fur1)"/>
+  <rect x="114" y="80" width="84" height="7" rx="3.5" fill="var(--fur1)"/><circle cx="226" cy="100" r="13" fill="var(--lilac)"/>
+  <path d="M60 150h200" stroke="var(--lilac)" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 12"/>
+  <circle cx="270" cy="34" r="6" fill="var(--pink)"/><circle cx="34" cy="120" r="4" fill="var(--orange)"/>
 </svg>`;
-const LOOK_DOT = { 'Pink Punch': '#e46fa0', 'Bold Blue': '#2f5cf5', 'Flat-Pack': '#f2a65a', 'Happy Headspace': '#f6c445', 'Yellow Frame': '#ffd23a' };
+const LOOK_DOT = { 'Pink Punch': '#e46fa0', 'Bold Blue': '#2f5cf5', 'Flat-Pack': 'var(--orange)', 'Happy Headspace': '#f6c445', 'Yellow Frame': '#ffd23a' };
 
 function when(iso) {
   const d = new Date(iso);
@@ -57,9 +47,9 @@ function when(iso) {
   return d.toLocaleDateString([], { day: 'numeric', month: 'short', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) }).toLowerCase();
 }
 
-export function mountHome(el, { audio, onNew, onResume, onOpen, draft, update } = {}) {
+export function mountHome(el, { audio, onNew, onResume, onOpen, onFinalize, draft, update } = {}) {
   const sfx = n => { try { audio && audio.sfx && audio.sfx(n); } catch (e) { /* optional */ } };
-  let alive = true, decks = [], page = 0, loaded = false, pollT = 0;
+  let alive = true, decks = [], page = 0, loaded = false, pollT = 0, idle = 0, fails = 0, showArchived = false, menuOpen = null, undoT = 0;
 
   const d = draft ? draft() : null;
   // "make a new deck" is always the main card; an unfinished draft only adds a smaller "continue" card under it.
@@ -73,12 +63,59 @@ export function mountHome(el, { audio, onNew, onResume, onOpen, draft, update } 
     h('span', { class: 'hm-cont-h' }, 'continue your draft'),
     h('span', { class: 'hm-cont-s' }, `you’re at step ${d.step}. pick up where you left off.`)) : null;
   if (contCard) contCard.addEventListener('click', () => { sfx('launch'); onResume && onResume(); });
+  // the Claude account: plan type and "switch account" (claude auth logout, then the sign-in flow)
+  const acctT = h('span', { class: 'hm-acct-t' }, 'claude account');
+  const acctGo = h('button', { type: 'button', class: 'hm-acct-go', 'data-cursor-label': 'switch', 'data-nosfx': '' }, 'switch account');
+  const acct = h('div', { class: 'hm-acct', hidden: true }, h('span', { class: 'hm-acct-dot', html: SVG.user }), acctT, acctGo);
+  function paintAcct(st) {
+    if (!st || st.cli === false) { acct.hidden = true; return; }
+    const plan = String(st.subscriptionType || '').toLowerCase();
+    acct.hidden = false;
+    acct.classList.toggle('is-free', !!plan && !['pro', 'max', 'team', 'enterprise'].includes(plan));
+    acctT.replaceChildren(...(st.signedIn ? ['claude ', h('b', {}, plan || 'signed in'), plan ? ' plan' : ''] : ['claude: not signed in']));
+    acctGo.textContent = st.signedIn ? 'switch account' : 'sign in';
+  }
+  let acctArm = 0;
+  acctGo.addEventListener('click', async () => {
+    if (acctGo.disabled) return;
+    const signedIn = acctGo.textContent === 'switch account';
+    if (signedIn && !acctArm) { sfx('pop'); acctGo.textContent = 'tap again to switch'; acctArm = setTimeout(() => { acctArm = 0; acctGo.textContent = 'switch account'; }, 3000); return; }
+    clearTimeout(acctArm); acctArm = 0;
+    acctGo.disabled = true; sfx('launch');
+    if (signedIn) {
+      const r = await api.claude.logout();
+      if (!alive) return;
+      if (r && r.ok === false) { acctGo.disabled = false; acctGo.textContent = 'switch account'; say(r.error === 'busy' ? 'claude is busy right now. try again when it’s done.' : 'couldn’t sign out. try again?'); return; }
+    }
+    const r = await api.fix('signin');
+    if (!alive) return;
+    if (r && r.ok === false) { acctGo.disabled = false; paintAcct(await api.claude.status(true)); say('the sign-in window didn’t open. try again?'); return; }
+    acctGo.textContent = 'signing in…';
+    say('finish signing in in the window that opened. lumi notices by itself.');
+    const t0 = Date.now();
+    while (alive && Date.now() - t0 < 6 * 60 * 1000) {
+      await new Promise(res => setTimeout(res, 3000));
+      if (!alive) return;
+      const st = await api.claude.status(true);
+      if (st && st.signedIn) { sfx('success'); acctGo.disabled = false; paintAcct(st); say(`signed in. claude ${String(st.subscriptionType || '').toLowerCase()} plan.`); return; }
+    }
+    acctGo.disabled = false; paintAcct(await api.claude.status(true));
+  });
+  api.claude.status().then(st => { if (alive) paintAcct(st); });
+  const runUpdate = b => startUpdate('update', { say, sfx, alive: () => alive, button: b });
+  // F-15: the soft custom pointer can be switched off for the normal Windows pointer (remembered on this computer)
+  const pointerB = h('button', { type: 'button', class: 'hm-pointer', 'data-nosfx': '', 'aria-pressed': 'false', title: 'switch between lumi’s soft mouse pointer and the normal Windows pointer', 'aria-label': 'mouse pointer: switch between lumi’s soft pointer and the normal one' });
+  const paintPointer = native => { pointerB.textContent = native ? 'soft pointer' : 'normal pointer'; pointerB.setAttribute('aria-pressed', native ? 'true' : 'false'); };
+  import('./cursor.js').then(m => { if (!alive || !m.nativePointer) return; paintPointer(m.nativePointer()); pointerB.hidden = false;
+    pointerB.addEventListener('click', () => { const on = !m.nativePointer(); m.setNativePointer(on); paintPointer(on); }); }, () => { pointerB.hidden = true; });
+  pointerB.hidden = true;
   const left = h('div', { class: 'hm-left' },
     h('span', { class: 'badge' }, 'your library'),
     h('h1', { class: 'q hm-head' }, 'your decks'),
     h('p', { class: 'lead hm-lead' }, 'open one to change it with claude, or start something new.'),
-    update ? h('p', { class: 'hm-upd' }, h('span', { class: 'hm-upd-dot' }), `a new version (${String(update.latest).replace(/^v/, '')}) is ready. update from the loading screen next time.`) : null,
-    newCard, contCard);
+    update ? h('button', { type: 'button', class: 'hm-upd', 'data-cursor-label': 'update', onclick: e => runUpdate(e.currentTarget) },
+      h('span', { class: 'hm-upd-dot' }), `update available (${String(update.latest).replace(/^v/, '')}). tap to update.`) : null,
+    acct, newCard, contCard);
   const grid = h('div', { class: 'hm-grid', role: 'list', 'aria-label': 'your decks' });
   const count = h('span', { class: 'hm-count' });
   const prev = h('button', { type: 'button', class: 'pg', 'aria-label': 'previous page', html: SVG.left });
@@ -86,15 +123,91 @@ export function mountHome(el, { audio, onNew, onResume, onOpen, draft, update } 
   const pgLabel = h('span', { class: 'pg-label' });
   const pager = h('div', { class: 'pager hm-pager' }, prev, pgLabel, nxt);
   const toast = h('p', { class: 'hm-toast', role: 'status' });
-  const foot = h('div', { class: 'hm-foot' }, count, toast, pager);
+  const undoB = h('button', { type: 'button', class: 'hm-undo', hidden: true, 'data-nosfx': '' }, 'undo');
+  const archB = h('button', { type: 'button', class: 'hm-arch', hidden: true, 'data-nosfx': '', 'aria-pressed': 'false' });
+  archB.addEventListener('click', () => { showArchived = !showArchived; page = 0; sfx('slide'); closeMenu(); paint(); });
+  const foot = h('div', { class: 'hm-foot' }, count, archB, toast, undoB, pointerB, pager);
   const right = h('div', { class: 'hm-right' }, grid, foot);
   el.replaceChildren(left, right);
 
   prev.addEventListener('click', () => { if (page > 0) { page--; sfx('slide'); paint(-1); } });
-  nxt.addEventListener('click', () => { if ((page + 1) * PER_PAGE < decks.length) { page++; sfx('slide'); paint(1); } });
+  nxt.addEventListener('click', () => { if ((page + 1) * PER_PAGE < decks.filter(x => !!x.archived === showArchived).length) { page++; sfx('slide'); paint(1); } });
 
   let toastT = 0;
-  const say = t => { toast.textContent = t; toast.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove('show'), 3200); };
+  const say = (t, undo = null) => {
+    toast.textContent = t; toast.classList.add('show'); clearTimeout(toastT); clearTimeout(undoT);
+    toastT = setTimeout(() => toast.classList.remove('show'), undo ? 9000 : 3200);
+    undoB.hidden = !undo;
+    if (undo) { undoB.onclick = async () => { undoB.hidden = true; await undo(); }; undoT = setTimeout(() => { undoB.hidden = true; }, 9000); }
+  };
+  // W-02: rename / archive / delete a deck from the library. Delete moves it to the bin (nothing is erased, the finished files
+  // in "4 - Your slides" are untouched) and the toast offers "undo"; it takes two taps, like the other destructive actions.
+  function closeMenu(restore = false) {
+    if (!menuOpen) return;
+    const m = menuOpen; menuOpen = null;
+    m.rel(restore); m.el.remove(); m.btn.setAttribute('aria-expanded', 'false');
+    if (restore) try { m.btn.focus({ preventScroll: true }); } catch (e) { /* gone */ }
+  }
+  function renameDeck(dk, card) {
+    const t = card.querySelector('.hm-title');
+    const inp = h('input', { class: 'hm-rename', type: 'text', maxlength: '200', 'aria-label': 'deck name' });
+    inp.value = dk.title || '';
+    t.replaceWith(inp);
+    inp.focus(); inp.select();
+    let done = false;
+    const finish = async save => {
+      if (done) return; done = true;
+      inp.blur();
+      const v = inp.value.trim();
+      if (save && v && v !== dk.title) {
+        const r = await api.decks.rename(dk.id, v);
+        if (!alive) return;
+        if (r && r.ok) { sfx('success'); say('renamed.'); } else { sfx('error'); say(r && r.error === 'offline' ? 'can’t reach lumi, so the name was not changed.' : 'couldn’t rename it. try again?'); }
+      }
+      refresh.sig = ''; refresh();
+    };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); finish(true); } else if (e.key === 'Escape') { e.preventDefault(); finish(false); } });
+    inp.addEventListener('blur', () => finish(true));
+  }
+  function openMenu(dk, card, btn) {
+    if (menuOpen && menuOpen.btn === btn) { closeMenu(true); return; }
+    closeMenu();
+    sfx('pop');
+    let armed = 0;
+    const item = (label, fn, cls = '') => { const b = h('button', { type: 'button', role: 'menuitem', class: 'hm-mi ' + cls, 'data-nosfx': '' }, label); b.addEventListener('click', fn); return b; };
+    const ren = item('rename', () => { closeMenu(); renameDeck(dk, card); });
+    const arc = item(dk.archived ? 'move back to the library' : 'archive', async () => {
+      closeMenu();
+      const r = await api.decks.archive(dk.id, !dk.archived);
+      if (!alive) return;
+      if (r && r.ok) { sfx('done'); say(dk.archived ? 'back in the library.' : 'archived. it is under “archived” at the bottom.'); refresh.sig = ''; refresh(); }
+      else { sfx('error'); say('couldn’t do that. try again?'); }
+    });
+    const del = item('delete', async () => {
+      if (!armed) { armed = 1; del.textContent = 'tap again to delete'; del.classList.add('is-armed'); setTimeout(() => { if (menuOpen && menuOpen.el.contains(del)) { armed = 0; del.textContent = 'delete'; del.classList.remove('is-armed'); } }, 3500); return; }
+      closeMenu();
+      const r = await api.decks.remove(dk.id);
+      if (!alive) return;
+      if (r && r.ok) {
+        sfx('deselect'); refresh.sig = ''; refresh();
+        say(`“${dk.title || 'untitled deck'}” moved to the bin.${r.keptFinal ? ' your finished files in “4 - Your slides” were not touched.' : ''}`, async () => {
+          const b = await api.decks.restore(r.binned);
+          if (!alive) return;
+          if (b && b.ok) { sfx('success'); say('brought back.'); refresh.sig = ''; refresh(); } else { sfx('error'); say('couldn’t bring it back. it is still in the folder “.aura/decks/_deleted”.'); }
+        });
+      } else { sfx('error'); say(r && r.reason ? r.reason : r && r.error === 'offline' ? 'can’t reach lumi, so nothing was deleted.' : 'couldn’t delete it. try again?'); }
+    }, 'is-danger');
+    const el = h('div', { class: 'hm-menu', role: 'menu', 'aria-label': `${dk.title || 'deck'}: more` }, ren, arc, del);
+    card.append(el);
+    roving(el, '[role=menuitem]', { select: false, orientation: 'vertical' });
+    for (const b of el.querySelectorAll('[role=menuitem]')) b.tabIndex = -1;
+    el.firstChild.tabIndex = 0;
+    const rel = openDialog(el, { onEsc: () => closeMenu(true) });
+    btn.setAttribute('aria-expanded', 'true');
+    menuOpen = { el, btn, rel };
+  }
+  const onDocDown = e => { if (menuOpen && !menuOpen.el.contains(e.target) && !menuOpen.btn.contains(e.target)) closeMenu(); };
+  document.addEventListener('pointerdown', onDocDown, true);
 
   function thumb(dk) {
     const box = h('div', { class: 'hm-thumb' });
@@ -120,42 +233,71 @@ export function mountHome(el, { audio, onNew, onResume, onOpen, draft, update } 
     return box;
   }
   function statusPill(dk) {
-    const map = { building: ['building', 'run'], ready: ['ready', 'ok'], missing: ['file missing', 'bad'], draft: ['not finished', 'wait'] };
+    if (dk.finalizing) return h('span', { class: 'hm-status', 'data-k': 'run' }, h('i'), 'finalizing…');
+    if (dk.status === 'building') return h('span', { class: 'hm-status', 'data-k': 'run' }, h('i'), dk.flow === 'plan' && dk.planState === 'planning' ? 'planning' : 'claude is working');
+    if (dk.flow === 'plan' && dk.planCount && dk.builtCount < dk.planCount)
+      return h('span', { class: 'hm-status', 'data-k': 'wait' }, h('i'), dk.builtCount ? `built ${dk.builtCount} of ${dk.planCount}` : 'planned, not built');
+    if (dk.flow === 'plan' && !dk.planCount && !dk.exists) return h('span', { class: 'hm-status', 'data-k': 'wait' }, h('i'), 'planning');
+    if (dk.exists && (!dk.finalized || dk.changedSinceFinalize)) {
+      const b = h('button', { type: 'button', class: 'hm-status hm-fin', 'data-k': 'wait', 'data-cursor-label': 'finalize', 'data-nosfx': '' }, h('i'),
+        dk.finalized ? 'changed since finalizing · ' : 'not finalized yet · ', h('span', { class: 'hm-fin-go' }, dk.finalized ? 'finalize again' : 'finalize'));
+      b.addEventListener('click', e => { e.stopPropagation(); sfx('launch'); onFinalize && onFinalize(dk); });
+      return b;
+    }
+    const map = { ready: ['finalized', 'ok'], missing: ['file missing', 'bad'], draft: ['not finished', 'wait'] };
     const [t, k] = map[dk.status] || [dk.status, 'wait'];
     return h('span', { class: 'hm-status', 'data-k': k }, h('i'), t);
   }
   function deckCard(dk, i) {
+    const pill = statusPill(dk);
     const look = dk.look && dk.look !== 'Claude chooses' ? dk.look : null;
     const editB = h('button', { type: 'button', class: 'hm-b hm-edit', 'data-cursor-label': dk.exists ? 'edit' : 'open', 'data-nosfx': '' },
-      h('span', { html: SVG.pen }), dk.exists ? 'edit' : dk.status === 'building' ? 'watch' : 'open');
+      h('span', { html: SVG.pen }), dk.flow === 'plan' && dk.planCount > dk.builtCount ? (dk.builtCount ? 'build' : 'plan') : dk.exists ? 'edit' : dk.status === 'building' ? 'watch' : 'open');
     const presentB = h('button', { type: 'button', class: 'hm-b hm-ico', 'aria-label': 'present', title: 'present', html: SVG.play, 'data-cursor-label': 'present' });
     const folderB = h('button', { type: 'button', class: 'hm-b hm-ico', 'aria-label': 'open the folder', title: 'open the folder', html: SVG.folder, 'data-cursor-label': 'folder' });
-    presentB.disabled = !dk.exists;
+    presentB.disabled = !dk.final;
+    presentB.title = dk.final ? 'present' : 'finalize it first';
+    const moreB = h('button', { type: 'button', class: 'hm-b hm-ico hm-more', 'aria-label': 'more: rename, archive or delete', title: 'rename, archive or delete', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'data-cursor-label': 'more',
+      html: '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></g></svg>' });
     const card = h('div', { class: 'hm-card', role: 'listitem', style: `--i:${i}`, 'data-id': dk.id },
       h('button', { type: 'button', class: 'hm-tbtn', 'aria-label': `open ${dk.title}`, 'data-cursor-label': 'open', 'data-nosfx': '' }, thumb(dk)),
       h('div', { class: 'hm-meta' },
         h('p', { class: 'hm-title', title: dk.title }, dk.title || 'untitled deck'),
-        h('p', { class: 'hm-sub' }, h('span', {}, when(dk.updatedAt || dk.createdAt)), look ? h('span', { class: 'hm-look' }, h('i', { style: `background:${LOOK_DOT[look] || '#c5b3d5'}` }), look.toLowerCase()) : null, statusPill(dk))),
-      h('div', { class: 'hm-acts' }, editB, presentB, folderB));
+        h('p', { class: 'hm-sub' }, h('span', {}, when(dk.updatedAt || dk.createdAt)), look ? h('span', { class: 'hm-look' }, h('i', { style: `background:${LOOK_DOT[look] || 'var(--fur3)'}` }), look.toLowerCase()) : null, pill.tagName === 'BUTTON' ? null : pill), pill.tagName === 'BUTTON' ? pill : null),
+      h('div', { class: 'hm-acts' }, editB, presentB, folderB, moreB));
+    moreB.addEventListener('click', () => openMenu(dk, card, moreB));
     const open = () => { sfx('launch'); onOpen && onOpen(dk); };
     editB.addEventListener('click', open);
     card.querySelector('.hm-tbtn').addEventListener('click', open);
-    presentB.addEventListener('click', async () => { sfx('launch'); const r = await api.openSlides(dk.file); if (alive && r && r.ok === false) say('couldn’t open it. try the folder.'); });
+    presentB.addEventListener('click', async () => { if (!dk.final) return; sfx('launch'); const r = await api.openSlides(dk.final.html); if (alive && r && r.ok === false) say('couldn’t open it. try the folder.'); });
     folderB.addEventListener('click', async () => { const r = await api.openSlides(); if (alive && r && r.ok === false) say('couldn’t open the folder.'); });
     return card;
   }
   function paint(dir = 0) {
-    const pages = Math.max(1, Math.ceil(decks.length / PER_PAGE));
+    closeMenu();
+    const nArch = decks.filter(x => x.archived).length;
+    if (!nArch) showArchived = false;
+    const shown = decks.filter(x => !!x.archived === showArchived);
+    archB.hidden = !nArch;
+    archB.textContent = showArchived ? 'back to my decks' : `archived (${nArch})`;
+    archB.setAttribute('aria-pressed', showArchived ? 'true' : 'false');
+    const pages = Math.max(1, Math.ceil(shown.length / PER_PAGE));
     page = Math.min(page, pages - 1);
-    const items = decks.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
+    const items = shown.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
     if (!loaded) {
       grid.replaceChildren(...Array.from({ length: 3 }, (_, i) => h('div', { class: 'hm-card hm-ghost', style: `--i:${i}` }, h('div', { class: 'hm-thumb is-loading' }, h('span', { class: 'hm-shimmer' })))));
-    } else if (!decks.length) {
+    } else if (loaded === 'offline') {
+      // F-19: not "no decks yet" and not a vanished account pill: say what is wrong and offer the retry
+      const again = h('button', { type: 'button', class: 'hm-retry', 'data-nosfx': '' }, 'try again now');
+      again.addEventListener('click', () => { again.disabled = true; idle = 0; refresh().then(() => { again.disabled = false; }); });
       grid.replaceChildren(h('div', { class: 'hm-empty' }, h('div', { class: 'hm-empty-art', html: EMPTY_ART }),
-        h('p', { class: 'hm-empty-t' }, 'no decks yet'), h('p', { class: 'hm-empty-x' }, 'your first one shows up right here once claude has built it.')));
+        h('p', { class: 'hm-empty-t' }, 'can’t reach lumi'), h('p', { class: 'hm-empty-x' }, 'is its window still open? your decks are safe. lumi keeps trying.'), again));
+    } else if (!shown.length) {
+      grid.replaceChildren(h('div', { class: 'hm-empty' }, h('div', { class: 'hm-empty-art', html: EMPTY_ART }),
+        h('p', { class: 'hm-empty-t' }, showArchived ? 'nothing archived' : 'no decks yet'), h('p', { class: 'hm-empty-x' }, showArchived ? 'decks you archive wait here.' : 'your first one shows up right here once claude has built it.')));
     } else grid.replaceChildren(...items.map(deckCard));
     grid.dataset.dir = dir;
-    count.textContent = loaded && decks.length ? `${decks.length} deck${decks.length === 1 ? '' : 's'}` : '';
+    count.textContent = loaded === true && shown.length ? `${shown.length} deck${shown.length === 1 ? '' : 's'}` : '';
     pager.hidden = pages <= 1;
     prev.disabled = page === 0; nxt.disabled = page >= pages - 1;
     pgLabel.textContent = `${page + 1} / ${pages}`;
@@ -163,16 +305,23 @@ export function mountHome(el, { audio, onNew, onResume, onOpen, draft, update } 
   async function refresh() {
     const r = await api.decks.list();
     if (!alive) return;
+    let changed = false;
     if (r && Array.isArray(r.decks)) {
-      const sig = JSON.stringify(r.decks.map(x => [x.id, x.status, x.updatedAt, x.thumb, x.title]));
-      const changed = sig !== refresh.sig; refresh.sig = sig;
+      fails = 0;
+      const sig = JSON.stringify(r.decks.map(x => [x.id, x.status, x.updatedAt, x.thumb, x.title, x.finalized, x.changedSinceFinalize, x.finalizing, x.builtCount, !!x.archived]));
+      changed = sig !== refresh.sig; refresh.sig = sig;
       decks = r.decks; loaded = true;
-      if (changed) paint();
-    } else if (!loaded) { loaded = true; paint(); say('couldn’t load your decks. is lumi still running?'); }
+      if (changed && !(menuOpen || grid.querySelector('.hm-rename:focus'))) paint(); else if (changed) refresh.sig = '';
+    } else {
+      fails++;
+      if (loaded !== true) { loaded = 'offline'; paint(); }
+    }
+    idle = changed ? 0 : idle + 1;
     clearTimeout(pollT);
-    // keep an eye on decks that are being built
-    pollT = setTimeout(refresh, decks.some(x => x.status === 'building') ? 3000 : 15000);
+    // keep an eye on decks that are being built; F-09: everything slows down while nothing changes, in a hidden tab, or with the server away
+    const hot = decks.some(x => x.status === 'building' || x.finalizing);
+    pollT = setTimeout(refresh, fails ? api.pace(3000, fails, { max: 10000 }) : hot ? api.pace(3000, idle, { max: 8000 }) : api.pace(15000, idle, { max: 30000, hidden: 30000 }));
   }
   paint(); refresh();
-  return { refresh, destroy() { alive = false; clearTimeout(pollT); clearTimeout(toastT); el.replaceChildren(); } };
+  return { refresh, destroy() { alive = false; clearTimeout(pollT); clearTimeout(toastT); clearTimeout(undoT); clearTimeout(acctArm); closeMenu(); document.removeEventListener('pointerdown', onDocDown, true); el.replaceChildren(); } };
 }

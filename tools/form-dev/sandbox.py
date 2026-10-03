@@ -3,7 +3,10 @@ without touching a real installation. Default location X:\\aura-dev (pass anothe
   python tools/form-dev/sandbox.py [X:\\aura-dev] [--reset]
 Then run the server against it:
   set AURA_HOME=X:\\aura-dev\\.aura && python engine/form_server.py --port 8766
-The engine itself is used straight from the repo (live edits), only the user-side folders live in the sandbox."""
+The engine itself is used straight from the repo (live edits), only the user-side folders live in the sandbox.
+The private Python (.aura/venv, the interpreter the skill tells Claude to run) is made too, exactly as setup.ps1 does
+(python -m venv + the pythonPackages in setup/aura.config.json); without it every documented tool is unreachable for Claude
+(SURVEY L-01). --no-venv skips it (offline / quick UI work). An existing working venv is left alone."""
 import json, os, shutil, subprocess, sys
 from pathlib import Path
 
@@ -40,3 +43,24 @@ else:
 shutil.copytree(REPO / 'workspace' / '.claude', ROOT / '.claude')
 if keep: (ROOT / '.claude' / 'settings.local.json').write_bytes(keep)
 print(f'sandbox ready: {ROOT}\n  set AURA_HOME={AURA} && python engine/form_server.py --port 8766')
+
+def make_venv():
+    py = AURA / 'venv' / 'Scripts' / 'python.exe'
+    if py.exists():
+        r = subprocess.run([str(py), '-c', 'import PIL, pptx, docx, openpyxl, pypdf'], capture_output=True)
+        if r.returncode == 0:
+            print('  venv already works: ' + str(py)); return
+    base = shutil.which('py') and ['py', '-3'] or [sys.executable]
+    print('  making the private Python (.aura/venv) ...')
+    subprocess.run(base + ['-m', 'venv', str(AURA / 'venv')], check=True)
+    pkgs = cfg.get('pythonPackages') or []
+    subprocess.run([str(py), '-m', 'pip', 'install', '--quiet', '--disable-pip-version-check'] + pkgs, check=True)
+    print('  venv ready: ' + str(py))
+
+if '--no-venv' in sys.argv:
+    print('  (venv skipped: Claude will not find .aura/venv/Scripts/python.exe)')
+else:
+    try:
+        make_venv()
+    except Exception as e:
+        print(f'  WARNING: could not make the venv ({e}). Claude runs will fail on every Python tool until it exists.')

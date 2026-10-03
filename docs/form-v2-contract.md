@@ -1,14 +1,12 @@
-# Aura-Slide Studio (form v2, updated for v0.3): build contract
+# Lumi (formerly Aura-Slide Studio): build contract, form v2, updated for v0.5
 
-> **v0.3 changes** (plan "one .exe, loading check, deck library + editor"): VS Code is gone completely (the app is
-> the only way in); new screens `loading`, `home`, `editor` (section 5a); new routes (section 7a); new markers
-> `[[aura:choice …]]` and `[[aura:hint …]]`, editor message format, `data-edit` text ids and the runtime edit mode
-> (section 8). Where v0.3 text and older text disagree, v0.3 wins.
-
-This document is the single source of truth for building the new Aura-Slide web app (the "form") and the
-background slide-building pipeline. Parallel agents build different files against it. **Edit only the files your
-role owns** (section 1). If you need something from another module, code against the interface below and degrade
-gracefully if it is missing. Do not invent alternative interfaces.
+> **Status.** Sections 0-9 below are the v0.2/v0.3 contract and are still accurate for the screens, stage, theme,
+> module layout, upload/Claude-run plumbing and the `choice` / `hint` / `done` markers. **Section 10 (v0.5) is newer
+> and wins wherever it disagrees with anything above.** For exact behaviour the code is the authority:
+> `engine/form_server.py` (routes, `DECK_ROUTE`), `engine/aura_markers.py` + `engine/rules/markers.json` + `engine/form/js/markers.js` (markers),
+> `engine/deck/runtime.js` (header comment: the capture contract) and, for what Claude is told,
+> `workspace/.claude/CLAUDE.md` plus `workspace/.claude/skills/aura-slide/{SKILL,planning,building}.md`.
+> The product has been called **Lumi** since v0.4 (the repo and some filenames still say aura).
 
 ## 0. What the owner asked for (verbatim intent)
 
@@ -284,7 +282,7 @@ folders; **never pass user text on a command line** (Claude prompts go through s
   `{i, t, kind, text, tool?, detail?, ok?, code?}` with kinds `status, say, tool, tool-error, user, limit, error,
   done`. Parse stream-json lines: `system/init` (session id), `assistant` text → `say`, `tool_use` → `tool` with a
   short human detail (file name, command head), failed `tool_result` → `tool-error`, `rate_limit_event` with a
-  non-allowed status → `limit`, `result` → `done` (`ok = !is_error`; `waiting = text contains [[aura:ask]]`).
+  non-allowed status → `limit`, `result` → `done` (`ok = !is_error`; `waiting = the text has [[aura:ask]] alone on a line`).
   Ignore non-JSON lines unless the process fails; detect sign-in problems → `error` with `code:'auth'`.
   Persist events + session id under `.aura/temp/` so a reload or server restart shows the history and can resume.
 - `POST /api/open-slides {path?}` → opens a deck (must be inside "4 - Your slides") in the default browser, or the folder.
@@ -303,7 +301,7 @@ folders; **never pass user text on a command line** (Claude prompts go through s
 |---|---|
 | `GET /api/health` | readiness checks: engine files, fonts, assets; Node + `engine/node_modules` (three, playwright-core); Edge; venv Python packages; Claude CLI; `claude auth status` (`loggedIn`, `subscriptionType`; free → needs Pro/Max/Team); free disk; app version vs latest GitHub release (cached, network optional) |
 | `POST /api/fix/<name>` | `npm` (npm install), `pip` (pip install), `signin` (`claude auth login` in a visible window, then poll), `update` (runs `AuraSlide.exe --update`), `claude` (reinstall via update) |
-| `GET /api/decks` | deck records from `.aura/decks/<id>.json`: `{id, title, file, look, quality, createdAt, updatedAt, sessionId, brief}` (existing decks in "4 - Your slides" are migrated into records) |
+| `GET /api/decks` | deck records from `.aura/decks/<id>.json`: `{id, title, file, look, quality, createdAt, updatedAt, sessionId, briefSavedAt, ...}` (existing decks in "4 - Your slides" are migrated into records). The list never carries `brief` or `plan` (F-02); `GET /api/decks/<id>` does. |
 | `POST /api/decks` | new deck from the current draft brief |
 | `GET /api/decks/<id>/thumb.png` | first slide picture (cached in `.aura/temp/thumbs/`, made with `engine/tools/shoot_slides.js`) |
 | `GET /deck/<id>/` | that deck's packed HTML, read-only (preview iframes; `?aura=edit` turns on the runtime edit mode) |
@@ -319,29 +317,15 @@ Removed in v0.3: `POST /api/open-vscode` and every other VS Code path.
 "is this right?" confirmation and goes straight on, asking only decisions that are really unclear (choice markers).
 Later messages in the same session (`--resume`) come from the editor.
 
-**Marker grammar.** Every marker is alone on its own line (trim the line, then it must match in full). Attribute
-values are in straight double quotes and never contain `"`, a line break or `]]`; `slide=` is a bare integer. The app
-hides marker lines from the chat.
-
-| Marker | Meaning |
-|---|---|
-| `[[aura:stage=read]]` `…=plan` `…=build` `…=check` `…=export` `…=done` | progress (stage starts now) |
-| `[[aura:ask]]` | Claude ended the turn waiting for an answer (always the last line) |
-| `[[aura:done path="4 - Your slides/<file>.html"]]` | deck built or changed (always the last line) |
-| `[[aura:choice id="q1" question="…" options="A\|B\|C" multi="no" default="B"]]` | decision buttons |
-| `[[aura:hint slide=3 text="…"]]` | suggestion chip for slide 3 |
-
-- **choice**: attributes in the order `id question options multi default`, all required. `id` matches
-  `[a-z0-9-]+` (`q1`, `q2`, `q3`), unique within a message. `question` ≤ 110 chars. `options`: 2–5 answers split on
-  `|`, each ≤ 40 chars. `multi` is `yes` or `no`. `default` is one of the options (with `multi="yes"`: one or more
-  joined by `|`). At most 3 choices per message, followed by `[[aura:ask]]`. The app always adds a free-text box
-  (no "Other" option is sent). **Answer format** (sent as a normal reply): one line per question,
-  `q1: <option>`, multi answers joined with ` | ` (`q2: A | C`), optionally followed by the user's own text; a
-  question left out means its default.
-- **hint**: `slide` is 1-based, `text` ≤ 90 chars and phrased as a request the user can send. 3–5 per build/edit,
-  emitted just before the `done` line. Clicking one fills the text box (prefixed `[slide N]` when sent).
-- Suggested parse (JS): `/^\[\[aura:choice id="([a-z0-9-]+)" question="([^"]*)" options="([^"]*)" multi="(yes|no)" default="([^"]*)"\]\]$/`
-  and `/^\[\[aura:hint slide=(\d+) text="([^"]*)"\]\]$/`; be lenient on extra spaces between attributes.
+**Markers.** The grammar, the full inventory (who writes each marker and who reads it), the `choice` / `hint` attributes
+and the question limits are defined once, in the "App markers" and "Asking questions" sections of
+`workspace/.claude/skills/aura-slide/SKILL.md`; the machine-readable definition is `engine/rules/markers.json`. The server
+reads markers with `engine/aura_markers.py`, the page with `engine/form/js/markers.js`; both are run against
+`tools/form-dev/marker_cases.json` by `tools/form-dev/test_instructions.py`, so they cannot differ. In short: a marker is one
+whole line, values are `"quoted"` or bare tokens, attribute order is free, and a line that mentions `[[aura:` but cannot be
+used is **reported** (a `marker-problem` event in the chat and a line in `form_server.log`), never dropped silently.
+Answers go back as `q1: <option>` lines (several answers joined with ` | `), then `note: <their own words>`; the
+`[slide N]` header on a reply is the slide the questions were about (the slide being built, while a step waits).
 
 **Editor messages.** `[slide N] <request>` (N = 1-based slide selected in the editor; no prefix = whole deck), with
 `use the file <name>` appended when the user attached a file to "3 - Put your files here/Anything else". Claude
@@ -381,3 +365,76 @@ other aspect ratios); 60 fps-ish on the welcome screen; gaze cardinal checks (ri
 left → 1.0 s, up → 1.70833 s, before the 1/240 offset); every screen reachable with keyboard; reduced motion
 respected; music starts only after a click and can be muted; closing asks for confirmation; uploads land in the
 right folder; a fake Claude run shows stages, tool lines, a question, a reply and the finished state.
+
+## 10. v0.5: plan, build slide by slide, finalize
+
+A deck is no longer made by one long Claude run. It goes **home -> plan -> build -> finalize**, all in ONE Claude
+conversation per deck (the deck's `sessionId`; every re-plan and build step `--resume`s it).
+
+**Screens (app routes, `setRoute(name, {deckId})` in `app.js`).** `loading` (readiness + Claude sign-in first,
+silent fixes), `home` (deck library, account pill, update note), `plan` (`js/plan.js`), `build` (`js/editor.js`,
+mounted with `build: true`), `finalize` (`js/finalizing.js`), `editor` (the v0.3 editor for finished decks), plus the
+`wizard` screens from `steps.js`. Nothing scrolls; the stage is still 1600 x 900.
+
+**Work folders.** Each deck keeps its editable files in `.aura/decks/<id>/` (`plan.json`, the packed editable deck)
+and its record in `.aura/decks/<id>.json` (fields in `DECK_FIELDS`: id, title, file, look, quality, createdAt,
+updatedAt, sessionId, brief, build, flow, planState, buildRest, buildTarget). The build source is still
+`.aura/temp/build/<deck>/`. **Only Finalize writes into `4 - Your slides/`.** `.aura/temp/plan.md` is Claude's own
+scratch notes, not the plan.
+
+**Quality picker** (`QUALITIES` in `form_server.py`): `best` (Opus / high, default), `better` (Opus / xhigh),
+`maximum` (Opus / max), `balanced` (Sonnet / high), `fast` (Sonnet / low). Planning always runs `PLAN_QUALITY`
+(`balanced`) whatever the deck's quality.
+
+**Routes added since v0.3** (localhost only, same Host/Origin rules as section 7):
+
+| Route | Does |
+|---|---|
+| `POST /api/plan/start` | new deck + planning run from the current draft brief |
+| `GET /api/decks/<id>/plan` | `plan_payload`: `{plan, planState, planError, wordCap, running, runKind, waiting, queued, buildStarted, buildRest, buildTarget, count, built, target, exists, mtime, final, changedSinceFinalize}` |
+| `POST /api/decks/<id>/plan` | save the person's edits `{plan, replan?: [slide ids]}`; `replan` queues those slides for Claude |
+| `POST /api/decks/<id>/plan/answer` | answer a doubt `{id, answer, other}` |
+| `POST /api/decks/<id>/plan/suggest` | "Claude, suggest one here" `{after}` |
+| `POST /api/decks/<id>/finalize {light?}` | record the 3D loops and write the final HTML + PDF; `light: true` = a lighter copy (CRF 27, 24 fps). The `final` record carries `htmlBytes`, `pdfBytes`, `light` and `warnings` (a PDF page whose 3D still was not ready is reported here, it no longer aborts the run). |
+| `POST /api/decks/<id>/pptx`, `GET /api/decks/<id>/pptx` | the explicit PowerPoint copy (`engine/tools/export_pptx.py`): one picture per slide (3D = its still image), speaker notes in the notes pane; background job, one at a time, never beside a finalize. Result `<Title>.pptx` in "4 - Your slides", recorded as `pptx` on the deck. |
+| `POST /api/cleanup {dry?}` | bounded retention (`reap()`, the policy is the comment above `RETENTION` in `form_server.py`): returns `{freed, removed:[{path, why, bytes}]}`; also runs by itself at startup and every 6 hours. |
+| `PATCH /api/decks/<id>` | `title`, `look`, `quality`; a different `look` once slides are built, or a different `quality` while Claude works on the deck, is refused with 409 `look-locked` / `quality-locked` (S-08). |
+| `POST /api/decks/<id>/build` | build actions (next slide, the rest, a target slide, stop) |
+| `POST /api/decks/<id>/finalize`, `POST /api/finalize/cancel`, `GET /api/finalize` | final export (packed HTML + PDF) through `engine/tools/finalize.js`; the only thing that writes to `4 - Your slides/` |
+| `GET /api/decks/<id>/slides`, `GET /api/decks/<id>/slides/<n>.png` | per-slide pictures |
+| `GET /api/health?part=claude` | only the Claude + sign-in checks (the loading screen asks this first) |
+| `GET /api/fix/status`, `POST /api/fix/<name>` | readiness fixes: `npm`, `pip`, `signin`, `update`, `repair` (runs `Lumi.exe --repair --from-app`), `claude` (body `{check, mode: fix or explain}`) |
+| `POST /api/claude/logout` | sign out (account switch) |
+
+`POST /api/decks` (create from a draft brief) still exists but only the server's own `new_deck()` uses it; the page does not.
+`POST /api/open-vscode` is gone for good.
+
+**Markers added in v0.5**: `plan` (the last line of a planning run; `path` optional), `plan-ok slide="s3"`, `built slide="s3"`
+and the extended `choice` (`slide`, `scope="deck"`, `when="q1=2"`, `depends="q1"`). All are in the SKILL.md inventory and in
+`markers.json`; `when` makes a question a *variant* (several markers may share one `id`, only the one whose condition holds for
+the answers so far is shown, changing an earlier answer swaps it and clears the answer it had; the value is an option's 1-based
+number or its exact text, `|` for alternatives, `&` for several conditions) and `depends` resets a question to its default.
+Do not use `[[aura:ask]]` while planning: doubts are answered on the page and come back as a `[plan-edit]` message; a planning
+run that still ends with an ask and no plan file gets a readable error (the question is quoted), and the answers to doubts of a
+plan that was never written bring a message asking Claude to write the whole plan.
+
+**`plan.json`** (Claude writes the content, the page edits it, the app keeps its own bookkeeping). The schema, who owns each
+field and the limits are in `workspace/.claude/skills/aura-slide/planning.md` ("The plan file"); the code is `form_server.py`
+(`PLAN_*` constants, `claude_view`, `plan_drift`, `normalize_plan`). The file Claude reads and writes is `claude_view(plan)`:
+it leaves out the app's fields (`doubts`, `seq`, `lastChange`, `repairs`, `builtAt`, `status`, `editedAt`), which are always
+restored from the deck record; whatever else Claude writes that the app ignores is logged (`plan.json from Claude: ...`). The
+per-slide word cap in the plan payload (`wordCap`) is the `hard-rules.json` number for the look (Bold Blue 55, others 25).
+
+**Runtime capture contract** (`engine/deck/runtime.js`; its header comment is exact). With `?capture` the deck sets
+`window.LumiCapture = { ready: Promise, slides: { <1-based n>: { period, seek: async t => {}, rect, holder } } }`.
+`seek(t)` makes slide *n* current, renders a deterministic frame of every `.aura-3d` / `.aura-canvas` piece at time
+`t` (not wrapped: seek(0) equals seek(period)) and resolves when the frame is on screen. Slide text is hidden during
+a seek so it is never baked into the video; projected labels inside the holder are baked in. `rect` is the main
+holder in slide pixels (1920 x 1080). A deck may embed recorded loops as
+`<script type="text/plain" id="lumi-loop-<n>" data-mime="video/mp4" data-period="12">BASE64</script>`; that slide
+then plays the video instead of the live scene. `?still=n` renders slide n as one calm still frame. Finalize
+(`finalize.js`) records each loop through `LumiCapture` and encodes limited-range BT.709 H.264.
+
+**Rules that changed.** The 26 px minimum text size is the default (`workspace/.claude/CLAUDE.md`), but the Bold Blue
+look allows 20 px for footer, page number, captions and step labels only; the checker enforces the active look's
+limits. Which commands Claude may run is decided by `workspace/.claude/settings.json`, not by this file.

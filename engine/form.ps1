@@ -7,7 +7,14 @@ $ErrorActionPreference = 'Stop'
 $Aura = Split-Path -Parent $PSScriptRoot
 $cfg  = Get-Content (Join-Path $Aura 'aura.config.json') -Raw | ConvertFrom-Json
 $port = [int]$cfg.formPort
-$url  = "http://127.0.0.1:$port/"
+$portFile = Join-Path $Aura 'temp\port'      # the port the server really bound (it moves on when the configured one is taken)
+function Use-Port([int]$p) { $script:port = $p; $script:url = "http://127.0.0.1:$p/" }
+Use-Port $port
+$active = 0
+if ((Test-Path $portFile) -and [int]::TryParse((Get-Content $portFile -Raw).Trim(), [ref]$active) -and $active -gt 1023 -and $active -ne $port) {
+  Use-Port $active
+  if (-not (try { Invoke-RestMethod ($url + 'api/ping') -TimeoutSec 2 } catch { $null })) { Use-Port ([int]$cfg.formPort) }
+}
 function Ping { try { Invoke-RestMethod ($url + 'api/ping') -TimeoutSec 2 } catch { $null } }
 function Alive { $null -ne (Ping) }
 function Venv-Ok {   # a venv only works while the Python it was made from still exists for this account
@@ -49,8 +56,18 @@ if (-not $ping) {
     Add-Type -AssemblyName PresentationFramework
     [void][Windows.MessageBox]::Show('Lumi needs a quick repair on this Windows account. Please download Lumi again and run it - your files and slides are kept.', 'Lumi', 'OK', 'Warning'); exit 1
   }
-  Start-Process -FilePath $pyw -ArgumentList ('"' + (Join-Path $PSScriptRoot 'form_server.py') + '"') -WindowStyle Hidden
-  for ($i = 0; $i -lt 40 -and -not (Alive); $i++) { Start-Sleep -Milliseconds 250 }
+  Remove-Item $portFile -ErrorAction SilentlyContinue
+  $srv = Start-Process -FilePath $pyw -ArgumentList ('"' + (Join-Path $PSScriptRoot 'form_server.py') + '"') -WindowStyle Hidden -PassThru
+  for ($i = 0; $i -lt 40 -and -not (Alive); $i++) {
+    Start-Sleep -Milliseconds 250
+    $np = 0
+    if ((Test-Path $portFile) -and [int]::TryParse((Get-Content $portFile -Raw).Trim(), [ref]$np) -and $np -gt 1023) { Use-Port $np }
+    if ($srv.HasExited) { break }
+  }
+  if (-not (Alive)) {
+    Add-Type -AssemblyName PresentationFramework
+    [void][Windows.MessageBox]::Show('Lumi could not start its small helper on this PC (the port may be in use by another program). Please restart the PC and try again, or double-click "Send problem report".', 'Lumi', 'OK', 'Warning'); exit 1
+  }
 }
 
 # Open as an app window in Edge (no tabs or address bar) when available, otherwise in the default browser.

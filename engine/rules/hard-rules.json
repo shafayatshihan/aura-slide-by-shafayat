@@ -1,13 +1,117 @@
 {
-  "version": 1,
-  "note": "Lumi HARD RULES. Enforced automatically by Claude Code hooks (.claude/settings.json -> rules/check_rules.js). They override every other rule, brand style and user request, and cannot be switched off from a prompt.",
+  "version": 2,
+  "note": "Lumi HARD RULES. Enforced automatically by Claude Code hooks (.claude/settings.json -> rules/check_rules.js). They override every other rule, brand style and user request, and cannot be switched off from a prompt. A deck made in a look listed under 'looks' (detected from <html data-look>, the theme's --aura-look token or its theme stylesheet) is checked against that look's own measured numbers instead of the generic ones; the checking itself never switches off.",
   "minFontPx": 26,
+  "generic": {
+    "note": "The numbers every look without its own entry in \"looks\" is checked against (deck_check.js reads them; CLAUDE.md quotes them). A look listed below replaces ALL of these with its own. Word budgets are for presenter mode; \"document\" is the cap for a content slide in document mode.",
+    "typeScale": [
+      28,
+      36,
+      48,
+      64,
+      84,
+      112,
+      150,
+      200
+    ],
+    "wordBudget": {
+      "title": 45,
+      "section": 8,
+      "content": 25,
+      "quote": 30,
+      "closing": 20,
+      "references": 140,
+      "document": 75
+    },
+    "whitespace": {
+      "title": 0.6,
+      "section": 0.6,
+      "quote": 0.7,
+      "closing": 0.6,
+      "content": 0.4,
+      "references": 0.3
+    },
+    "maxTypefaces": 4,
+    "maxSizesPerSlide": 4,
+    "maxSizesPerDeck": 6,
+    "contrastErrorBelow": 4,
+    "contrastLargeErrorBelow": 3,
+    "contrastWarnBelow": 4.5
+  },
   "rules": [
     {
       "id": 1,
       "name": "Minimum text size",
-      "rule": "No text on any slide may be smaller than 26 px, measured at the 1920x1080 design size. This covers every label, caption, source line, chart label and footer.",
-      "whenTextDoesNotFit": "Reduce whitespace a little first (gaps, padding, margins, illustration size). If it still does not fit, shorten the words or split into two slides. Never make text smaller than 26 px."
+      "rule": "No text on any slide may be smaller than 26 px, measured at the 1920x1080 design size. This covers every label, caption, source line, chart label and footer. Bold Blue decks use the Bold Blue numbers measured from the reference deck that defines the look: 20 px only for the footer, page number, captions and chart step labels, 28 px for everything else.",
+      "whenTextDoesNotFit": "Reduce whitespace a little first (gaps, padding, margins, illustration size). If it still does not fit, shorten the words or split into two slides. Never make text smaller than the minimum."
     }
-  ]
+  ],
+  "looks": {
+    "bold-blue": {
+      "name": "Bold Blue",
+      "source": "Measured from the owner's 10 reference slides (1920x1080, Edge, 2026-10-02): body 28 px, kicker 28 px, stat 36/48 px, headline 64 px, title-slide meta 28 px, closing word 176 px; footer mark, page number, captions, chart step labels and the chart event pill 20 px (19.8 px after SVG scaling). Type scale 20/28/36/48/64/112/176.",
+      "minFontPx": 20,
+      "svgTolerancePx": 0.3,
+      "bodyMinPx": 28,
+      "bodyMinExempt": ".bb-foot, .bb-mark, .bb-pageno, .cap, .source, figcaption, .bb-cap, .bb-steplbl",
+      "typeScale": [
+        20,
+        28,
+        36,
+        48,
+        64,
+        112,
+        176
+      ],
+      "wordBudget": {
+        "title": 45,
+        "section": 12,
+        "content": 55,
+        "quote": 30,
+        "closing": 40,
+        "references": 140,
+        "document": 90
+      },
+      "whitespace": {
+        "title": 0.35,
+        "section": 0.6,
+        "quote": 0.6,
+        "closing": 0.6,
+        "content": 0.35,
+        "references": 0.3
+      },
+      "maxTypefaces": 2,
+      "maxSizesPerSlide": 5,
+      "maxSizesPerDeck": 7,
+      "safeZonePx": 96,
+      "measured": {
+        "wordsPerSlide": {
+          "title": 37,
+          "content": [
+            21,
+            53
+          ],
+          "closing": 33
+        },
+        "sizesPerSlide": [
+          3,
+          5
+        ],
+        "whitespace": {
+          "title": 0.4,
+          "content": [
+            0.41,
+            0.91
+          ],
+          "closing": 0.93
+        },
+        "typefaces": [
+          "Poppins",
+          "DM Mono"
+        ]
+      },
+      "bodyMinIsError": true,
+      "bodyMinExemptNote": "20 px is allowed only for the footer mark, the page number, captions / source lines and the chart's step labels and event pill (BBChart marks them .bb-steplbl / .bb-cap). Everything else is at least 28 px."
+    }
+  }
 }

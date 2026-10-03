@@ -1,0 +1,53 @@
+<!-- archetype: objectives-tour | a checklist of goals (done / under way) + a 3D tour that visits each goal | main visual: 3D | companions: a checklist of <=4 rows (follows the tour through Aura.sync) -->
+<section class="slide" data-kind="content" data-minutes="1.5" data-title="The objectives">
+  <div class="bb-blobs" aria-hidden="true">
+    <i style="left:-40px; top:20px; width:680px; height:680px; background:#CFE8FF; --t:24s; --dx:-70px; --dy:50px"></i>
+    <i style="left:940px; top:120px; width:880px; height:880px; background:#FFE1C7; --t:28s; --dx:90px; --dy:-50px"></i>
+    <i style="left:1400px; top:-80px; width:520px; height:520px; background:#DCD3FF; --t:22s; --dx:-60px; --dy:-60px"></i>
+  </div>
+  <div class="safe">
+    <div class="bb-main">
+      <div class="bb-l w5">
+        <p class="kicker" data-edit="s{{N}}-1">14 · The objectives</p>
+        <h2 class="headline" data-edit="s{{N}}-2">Four goals, <span class="em">three delivered</span></h2>
+        <ol class="bb-goals" id="s{{N}}-goals">
+          <li class="bb-goal on"><svg class="ic" viewBox="0 0 24 24" aria-label="done"><circle cx="12" cy="12" r="12" fill="currentColor"/><path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg><div><strong data-edit="s{{N}}-3">Build the thing</strong><span class="d" data-edit="s{{N}}-4">how, in five words</span></div></li>
+          <li class="bb-goal"><svg class="ic" viewBox="0 0 24 24" aria-label="done"><circle cx="12" cy="12" r="12" fill="currentColor"/><path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg><div><strong data-edit="s{{N}}-5">Measure it</strong><span class="d" data-edit="s{{N}}-6">how, in five words</span></div></li>
+          <li class="bb-goal"><svg class="ic" viewBox="0 0 24 24" aria-label="done"><circle cx="12" cy="12" r="12" fill="currentColor"/><path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg><div><strong data-edit="s{{N}}-7">Control it</strong><span class="d" data-edit="s{{N}}-8">how, in five words</span></div></li>
+          <li class="bb-goal wip"><svg class="ic" viewBox="0 0 24 24" aria-label="under way"><circle cx="12" cy="12" r="10.3" fill="none" stroke="currentColor" stroke-width="3.4"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg><div><strong data-edit="s{{N}}-9">Analyse the data</strong><span class="d" data-edit="s{{N}}-10">Under way · next term</span></div></li>
+        </ol>
+      </div>
+      <div class="bb-r w7">
+        <div class="bb-stage"><div class="aura-3d bb-3d" data-scene="s{{N}}-scene" role="img" aria-label="A 3D tour that visits each objective in turn."></div></div>
+      </div>
+    </div>
+    <footer class="bb-foot"><span class="bb-mark" data-edit="s{{N}}-11">Deck mark</span><span class="bb-pageno"></span></footer>
+  </div>
+  <aside class="notes" data-aura-notes>
+    <p>Say how many goals there were and how many are done. Let the model do the walking: the camera visits each goal as
+    its row lights up.</p>
+    <p>For each finished goal, give one concrete proof that it is done. For the one under way, say what is left and when
+    it will be finished.</p>
+    <p>If asked whether the last goal is late, say plainly what it waits on.</p>
+  </aside>
+</section>
+<script>
+(() => {
+  const SPOTS = [[-1.6, 0.6, 0.4], [-0.4, 0.6, -0.6], [0.8, 0.6, 0.5], [1.8, 0.6, -0.4]];
+  const shots = SPOTS.map(p => ({ pos: [p[0] + 2.2, 2.8, p[2] + 4.6], target: p, hold: 4.5, move: 1.5 }));
+  shots.push({ pos: [2.5, 5, 9], target: [0, 0.6, 0], hold: 4, move: 1.5 });
+  const tour = BBTime.tour({ shots });
+  Aura.scene('s{{N}}-scene', (ctx) => {
+    const { THREE } = ctx;
+    const S = BB3D.studio(ctx, { target: [0, 0.6, 0], distance: 10, post: { bloom: true } });
+    const M = BB3D.materials(THREE);
+    SPOTS.forEach((p, i) => { const b = BB3D.roundedBox(THREE, 1, 1, 1, 0.08, [M.copper, M.blue, M.ceramic, M.glass][i]); b.position.set(p[0], 0.5, p[2]); S.add(b); });
+    return S.api({ update(t) { S.tour(tour(t)); } });
+  }, { period: tour.period });
+  const rows = document.querySelectorAll('#s{{N}}-goals .bb-goal');
+  Aura.sync('s{{N}}-scene', t => {
+    const f = tour(t).focus, all = f === SPOTS.length;
+    rows.forEach((r, k) => r.classList.toggle('on', all || k === f));
+  });
+})();
+</script>

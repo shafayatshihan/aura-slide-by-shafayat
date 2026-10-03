@@ -8,25 +8,44 @@
       "Write",
       "Glob",
       "Grep",
-      "Bash(node:*)",
-      "Bash(npm:*)",
-      "Bash(npx:*)",
-      "Bash(python:*)",
-      "Bash(py:*)",
-      "Bash(.aura/venv/Scripts/python.exe:*)",
+      "Bash(.aura/venv/Scripts/python.exe .aura/engine/tools/:*)",
+      "Bash(./.aura/venv/Scripts/python.exe .aura/engine/tools/:*)",
+      "Bash(.aura/venv/Scripts/python.exe -c:*)",
+      "Bash(node .aura/engine/tools/:*)",
+      "Bash(node .aura/engine/rules/:*)",
       "Bash(ls:*)",
       "Bash(mkdir:*)",
       "Bash(cp:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "PowerShell(.aura/venv/Scripts/python.exe .aura/engine/tools/:*)",
+      "PowerShell(.aura\\venv\\Scripts\\python.exe .aura\\engine\\tools\\:*)",
+      "PowerShell(./.aura/venv/Scripts/python.exe .aura/engine/tools/:*)",
+      "PowerShell(.\\.aura\\venv\\Scripts\\python.exe .aura\\engine\\tools\\:*)",
+      "PowerShell(& .aura/venv/Scripts/python.exe .aura/engine/tools/:*)",
+      "PowerShell(& .\\.aura\\venv\\Scripts\\python.exe .aura\\engine\\tools\\:*)",
+      "PowerShell(.aura/venv/Scripts/python.exe -c:*)",
+      "PowerShell(node .aura/engine/tools/:*)",
+      "PowerShell(node .aura\\engine\\tools\\:*)",
+      "PowerShell(node .aura/engine/rules/:*)",
+      "PowerShell(Get-ChildItem:*)",
+      "PowerShell(Get-Content:*)",
+      "PowerShell(Test-Path:*)",
+      "PowerShell(New-Item:*)",
+      "PowerShell(Copy-Item:*)",
+      "PowerShell(Move-Item:*)"
     ],
     "deny": [
-      "Edit(.aura/engine/rules/**)",
-      "Write(.aura/engine/rules/**)",
+      "Edit(.aura/engine/**)",
+      "Write(.aura/engine/**)",
       "Edit(.claude/**)",
       "Write(.claude/**)",
-      "Bash(rm -rf:*)",
-      "Bash(git push:*)",
-      "Read(**/.env)"
+      "Read(**/.env)",
+      "Bash(rm:*)",
+      "Bash(git:*)",
+      "PowerShell(Remove-Item:*)",
+      "PowerShell(git:*)",
+      "PowerShell(Invoke-WebRequest:*)",
+      "PowerShell(Invoke-Expression:*)"
     ]
   },
   "hooks": {
@@ -34,14 +53,22 @@
       {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "node .aura/engine/rules/check_rules.js --hook", "timeout": 120 }
+          {
+            "type": "command",
+            "command": "node .aura/engine/rules/check_rules.js --hook",
+            "timeout": 120
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "node .aura/engine/rules/check_rules.js --stop", "timeout": 180 }
+          {
+            "type": "command",
+            "command": "node .aura/engine/rules/check_rules.js --stop",
+            "timeout": 180
+          }
         ]
       }
     ]

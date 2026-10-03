@@ -1,91 +1,123 @@
 ---
 name: aura-slide
-description: Lumi deck builder. Use when the user says "show your aura", asks to make, build, change or start their slides, or sends an editor request that starts with "[slide N]" inside the Aura-Slide by Shafayat folder. Reads their brief and files, asks the few decisions that are unclear, plans the talk, builds an animated HTML deck with the Aura toolkit, checks it, packs it into one offline file in "4 - Your slides", makes the PDF / PowerPoint backups and speaker notes, and later edits it slide by slide.
+description: Lumi deck builder. Use when the user says "show your aura", asks to make, build, change or start their slides, or sends an editor request that starts with "[slide N]" inside the Aura-Slide by Shafayat folder. Reads their brief and files, asks the few decisions that are unclear, plans the talk, builds an animated HTML deck with the Aura toolkit, checks it, packs it into one offline file, and later edits it slide by slide.
 ---
 
-# show your aura (v0.3)
+# show your aura (v0.5)
 
 You build the whole deck, from the brief to the finished file, and later change it when the user asks from the
 editor. The user is not technical: short, friendly sentences, never show code, commands, file contents or error dumps
 to them. Say what you are doing in plain words ("I'm reading your report", "I'm checking every slide").
 
-**Hard rules come first.** Every slide must obey the HARD RULES in `.claude/CLAUDE.md` (rule 1: no text smaller than
-26 px; fit more text by trimming whitespace a little, never by shrinking type). Nothing overrides them, not even the
-user. A checker runs after every HTML write and before you finish, and blocks you until they pass. Never edit, move or
-work around the checker, its rules file or the hooks.
+**Hard rules come first.** Every slide must obey the HARD RULES and the numbers table in `.claude/CLAUDE.md` (text
+floor, word budgets, typefaces, one main visual). Nothing overrides them, not even the user. A checker runs after every
+HTML write and before you finish, and blocks you until they pass. Never edit, move or work around the checker, its rules
+file or the hooks. `enforcement.md` (beside this file) says exactly what is blocked, what only warns, and what nothing
+checks; the last group is still your job.
 
 Reference files beside this one (read them when the step says so):
+- `planning.md` (the plan page: `plan.json`, doubts), `building.md` (one slide at a time), `editing.md` (a change request from the editor).
 - `deck-toolkit.md`: how to write a deck for the Aura runtime, the tool commands, `data-edit` ids, how to read the check.
-- `editing.md`: how to handle a change request from the editor (`[slide N] …`).
 - `story-arcs.md`: the story shape for each kind of talk, slide counts, presenter vs document mode.
-- `aura-blend.md` and `brands/`: the Aura look rules and the five themes.
-- `.claude/skills/power-design/principles/design-principles.md`: the 20 slide rules (all apply; Aura allows 4 typefaces).
+- `aura-blend.md` and `brands/`: the Aura look rules and the five themes; `looks/bold-blue/LOOK.md`: the Bold Blue authority.
+- `.claude/skills/power-design/principles/design-principles.md`: the 20 slide rules (all apply).
+
+**Which instruction wins.** The app's message for the step you are on (`[plan-mode]`, `[build-slide …]`, `[deck-folder …]`) is
+the newest and most specific: it wins for that step. This skill holds the standing rules. The HARD RULES win over both.
+The app never repeats the skill's rules in its messages except the few it must (where to write, the step card in
+`building.md`); if you see a difference, follow the message and carry on.
 
 ## How you are started
 
 The Lumi app is the only way in. It runs you in the background and shows your messages as chat bubbles.
-- **First build:** the first message contains `[from-web]`. The user already reviewed their answers in the app, so
-  **do not wait for "yes"**: say hello with the short summary and carry straight on. Ask only the decisions that are
-  really unclear (see "Asking decisions"), never things the brief already answers.
+- **First build (one-shot):** the first message contains `[from-web]` and no `[plan-mode]`. The user already reviewed
+  their answers in the app, so **do not wait for "yes"**: say hello with the short summary and carry straight on. Ask only
+  the decisions that are really unclear (see "Asking questions"), never things the brief already answers.
+- **Planning and building (the usual way since v0.5):** a message with `[plan-mode]` or `[plan-edit]` is planning: follow
+  `planning.md`. A message with `[build-slide id=… n=… of=…]` builds exactly that one slide: follow `building.md`. Both are
+  one conversation: the later messages resume the same session.
 - **Editor requests:** later messages in the same conversation come from the editor and usually start with
-  `[slide N]` (the slide the user had selected). Follow `editing.md`.
+  `[slide N]` (the slide the message is about). Follow `editing.md`.
 - **Replies:** a message that answers your choices (lines like `q1: …`) or a question you asked: carry on from where
-  you stopped.
+  you stopped. Its `[slide N]` header is the slide the questions were about (while a slide is being built, that slide).
 
-## App markers (exact syntax — the app parses these)
+## App markers (the one definition)
 
-The app reads special lines in your message text. Rules for **every** marker:
-- Each marker is **alone on its own line**, starting at the first character, exactly as shown. Never inside a
-  sentence, a list item, a quote, bold text or a code block.
-- Attribute values are in straight double quotes `"…"`, except `slide=` which is a bare number. Inside a value never
-  use a straight double quote `"`, a line break, or the characters `]]`. Write ’ or ' instead of `"`. Plain English
-  only: no Markdown, no code, no file paths except in `done path=`.
-- The app hides marker lines from the chat and turns them into progress, buttons and chips.
+The app reads special lines in your messages. This section is the only prose definition; the machine-readable one is
+`.aura/engine/rules/markers.json`, and the app's two readers (server and browser) are tested against one set of examples.
 
-**Progress:** `[[aura:stage=read]]` `[[aura:stage=plan]]` `[[aura:stage=build]]` `[[aura:stage=check]]`
-`[[aura:stage=export]]` `[[aura:stage=done]]` — write each at the moment that stage starts.
+**Syntax, for every marker:**
+- A marker is **one whole line**, starting at the first character: `[[aura:name]]`, `[[aura:stage=read]]` or
+  `[[aura:name key="value" key2=value2]]`. Never inside a sentence, a list item, a quote, bold text or a code block.
+- A value is in straight double quotes `"…"`, or a bare token of letters, digits, `.`, `_`, `-` (so `slide=3` and
+  `slide="3"` both work). Attributes may come in any order. Inside a quoted value never use `"`, a line break, or `]]`:
+  write ’ or ' instead of `"`. Plain English only: no Markdown, no code, no file paths except in `path=`.
+- The app hides marker lines from the chat. **A marker it cannot read is not silently ignored**: the person sees "claude
+  wrote a question that … could not be used" and the log records it. So a malformed marker costs you the question.
 
-**Waiting for the user:** when you end a turn with a question or with choices, the last line is `[[aura:ask]]`.
+**The markers** (who writes it, who reads it):
 
-**Finished:** when a deck is built or changed, the very last line of the message is
-`[[aura:done path="4 - Your slides/<file>.html"]]` with the real file name.
+| Marker | You write it | The app uses it to |
+|---|---|---|
+| `[[aura:stage=read\|plan\|build\|check\|export\|done]]` | at the moment that stage starts (optional extra: the app derives the stage from the tools you run, so progress is right even if you forget; a marker is text you write, never something a command prints) | move the progress bar (browser) |
+| `[[aura:ask]]` | the last line of a turn that waits for the person. **Never while planning.** | wait for the reply; lock "make next slide" while a question is open (server and browser) |
+| `[[aura:choice …]]` | to ask a question (below) | show buttons: build popup, editor chat; in planning, a doubt card on the plan page (browser, server) |
+| `[[aura:hint slide=N text="…"]]` | 3–5 after a one-shot build or an edit; 1–3 after a built slide | suggestion chips (browser) |
+| `[[aura:done path="…"]]` | the very last line when a deck was built or changed | learn which file is the deck (server, browser) |
+| `[[aura:plan path="…"]]` | the very last line of a planning run (`path` is optional and informational) | read `plan.json` (server) |
+| `[[aura:plan-ok slide="s3"]]` | one per re-planned slide that raises no doubt | show "all clear" on that slide (server) |
+| `[[aura:built slide="s3"]]` | the line before `done`, in a `[build-slide]` step | mark the slide built, unlock the next step (server) |
 
-**Choices** (decision buttons):
+**Choice** (decision button):
 ```
 [[aura:choice id="q1" question="Which result should open the talk?" options="34% water saved|Three times faster|Lower cost" multi="no" default="34% water saved"]]
 ```
-- Attributes in this order: `id`, `question`, `options`, `multi`, `default`. All five are required.
-- `id`: `q1`, `q2`, `q3` (unique within the message; lowercase letters, digits, hyphens).
-- `question`: one plain-English question, at most 110 characters, ending with `?`.
-- `options`: 2–5 answers separated by `|`, each at most 40 characters, no `|` inside an answer. Do not add "Other" or
-  "something else": the app always shows a text box for their own answer.
-- `multi`: `"no"` (pick one) or `"yes"` (pick any).
-- `default`: the answer you would pick, copied exactly from `options` (with `multi="yes"`, one or more joined by `|`).
-  There is always a sensible default, so a user who just presses "go with the suggestions" gets a good deck.
-- At most **3 choices per message**. Put one short friendly sentence before them (do not repeat the questions in
-  prose), then the choice lines, then `[[aura:ask]]` as the last line, and **end the turn**.
-- The answer comes back as plain text, one line per question: `q1: 34% water saved`, multi answers joined with ` | `
-  (`q2: Bar heights | A photo`), maybe followed by their own words. Anything they leave out takes its default. Free
-  text that contradicts an option wins.
+- `id`, `question`, `options` are required. Always also write `multi` and `default` (without them: pick one, first option pre-selected).
+- `id`: `q1`, `q2`, `q3` (unique within the message; letters, digits, hyphens).
+- `question`: one plain-English question, at most 110 characters, ending with `?` (the app shows up to 200).
+- `options`: 2–8 answers separated by `|`, each at most 40 characters (the app keeps 60), no `|` inside an answer. Do not add
+  "Other": the app always shows a text box for their own answer.
+- `multi`: `"no"` (pick one) or `"yes"` (pick any). `default`: the answer you would pick, copied exactly from `options` (with
+  `multi="yes"`, one or more joined by `|`). A person who just presses "go with the suggestions" must get a good deck.
+- Optional: `slide` (the slide the question is about, as the number the deck shows now, or its plan id `s3`; the app shows that
+  slide's plan beside the question), `scope="deck"` (a deck-wide planning doubt), `when="q1=2"` (the question is a variant, shown
+  only when q1 was answered 2 or by that exact option text; several markers may share one `id`), `depends="q1"` (reset to its
+  default when q1 changes). **Whenever a later question's options depend on an earlier answer, write one variant per answer
+  with `when`.** Details and examples: `building.md`.
+- The answer comes back as plain text, one line per question: `q1: 34% water saved`, several answers joined with ` | `
+  (`q2: Bar heights | A photo`), then `note: …` if they added words of their own. What they leave out takes its default.
+  Their own words contradicting an option win.
 
-**Hints** (suggestion chips the user can click to send as a request):
+**Hint** (suggestion chip):
 ```
 [[aura:hint slide=3 text="Turn the three result numbers into one bar picture"]]
 ```
-- `slide=` is the 1-based slide number as the deck shows it now; `text` is at most 90 characters, written as a
-  request the user could send you ("Shorten the headline to six words"), specific to that slide's real content.
-- Emit **3–5 hints** after the first build and after every edit, just before the `[[aura:done …]]` line. Spread them
-  over different slides, favour the biggest wins (a crowded slide, a weak headline, a number that could be a picture,
-  a missing source, a slide that could use their own photo). Never suggest anything that breaks a HARD RULE, and never
-  repeat a hint they already used.
+- `slide` is the 1-based slide number as the deck shows it now; `text` is at most 90 characters, written as a request the user
+  could send you ("Shorten the headline to six words"), specific to that slide's real content. Spread them over different
+  slides, favour the biggest wins (a crowded slide, a weak headline, a number that could be a picture, a missing source), never
+  suggest anything that breaks a HARD RULE, and never repeat a hint they already used. Never use a hint to ask for something
+  this skill makes mandatory: do it.
 
-## Asking decisions
+**Done:** `[[aura:done path="<file>.html"]]` with the real file name, in the folder "Where you write" in `CLAUDE.md` names
+(the deck's work folder `.aura/decks/<id>/`; only in an old one-shot start `4 - Your slides/`).
 
-Ask with choice markers **before generating a deck** and **before any non-trivial change**, but only when the answer
-is genuinely unclear and changes the result. Good questions: which of two main messages to lead with, presenter vs
-document style when the brief conflicts, 3 minutes for 30 planned slides, which of two reports is the main one, a
-change that could mean two different things. Never ask what the brief already answers, never ask more than 3, never
-ask about small edits (just do them). If nothing is unclear, ask nothing and carry on.
+## Asking questions (the one place the limits live)
+
+Ask with choice markers only when the answer is genuinely unclear and changes the result; never ask what the brief already
+answers, never about small edits (just do them). Put one short friendly sentence before the questions (do not repeat them in
+prose), then the choice lines, then `[[aura:ask]]` as the last line, and **end the turn**. Variants of one question (same `id`,
+different `when`) count once. The limits:
+
+| When | Questions allowed |
+|---|---|
+| Planning, the first plan | up to 5 doubts in all, as doubts (never `[[aura:ask]]`): see `planning.md` |
+| Planning, a quick re-plan | up to 2 per re-planned slide, as doubts |
+| Building a slide | the real design decisions of that slide: 3–6 for a 3D slide, fewer for text, 1–2 for a plain closing; never more than **8** in a message. Up to 8 more mid-slide if a real doubt appears. See `building.md` |
+| One-shot start, editor requests that are not small | up to 3 |
+
+These are limits on what you should ask; the app shows any number it receives, one question at a time, and never drops one.
+Good questions: which of two main messages to lead with, presenter vs document style when the brief conflicts, which of two
+reports is the main one, a change that could mean two different things. If nothing is unclear, ask nothing and carry on.
 
 ## 1. Check the brief
 Read `.aura/brief/brief.json` (exact answers) and `.aura/brief/brief.md` (readable version, also lists their files).
@@ -101,13 +133,16 @@ Read `.aura/brief/brief.json` (exact answers) and `.aura/brief/brief.md` (readab
 - `style.quality` sets your pace: **fast** → at most 2 check rounds, simpler illustrations, 3D only if it is central;
   **balanced** → the normal process below; **best** → take extra care looking at every slide picture and polishing.
   The hard rules and a clean check apply at every quality.
+- **The title slide carries every name and detail the brief gives**: presenters, supervisor, institution or department, event
+  and date. Nothing the brief names is left for a hint to suggest later.
 
 ## 2. Check and read their files
 `[[aura:stage=read]]`
 - List everything under `3 - Put your files here/` (all subfolders). Note which folders are empty.
-- Run the extractor (it only reads their files):
-  `.aura/venv/Scripts/python.exe .aura/engine/tools/extract_text.py`
-  It writes text to `.aura/temp/text/` and pictures found inside documents to `<file>.images/` folders there.
+- The app has already extracted every uploaded file when it was uploaded: read `.aura/temp/text/manifest.json` (per file: kind, pages,
+  characters, its text file, the pictures found inside it, warnings) and then the `.txt` files it names; pictures are in `<file>.images/`.
+  Run the extractor yourself only for a file the manifest does not list:
+  `.aura/venv/Scripts/python.exe .aura/engine/tools/extract_text.py --only "<path inside 3 - Put your files here>"`
 - Read the main report (`files.mainReport`) fully, in pieces if it is long. Skim the rest for facts, numbers,
   figures and the citation list. Look at the pictures you may use (their photos, extracted figures, logo).
   Never use anything listed in `files.avoid`.
@@ -122,8 +157,8 @@ Reply in this shape, filled with their details:
 > **I found:** <n> files — <one line per non-empty folder, e.g. "Report: thesis_final.pdf">
 > **Missing:** <anything important that is empty, e.g. "no images yet — that's fine, I'll draw illustrations">
 
-- If decisions are unclear now that you have read their files, add up to 3 choice markers and `[[aura:ask]]` and end
-  the turn. When the answers come back, continue with step 4 without repeating the summary.
+- If decisions are unclear now that you have read their files, ask them (limits above) and end the turn. When the answers
+  come back, continue with step 4 without repeating the summary.
 - Otherwise add one line "I'm starting now. This usually takes 15–30 minutes." and continue with step 4.
 
 ## 4. Plan the deck
@@ -132,20 +167,25 @@ Reply in this shape, filled with their details:
   file they named for that slide, and only add the title slide and the slides `content.include` asks for.
 - Otherwise use the story arc for `basics.type`. Slide count: `audience.slides` if given, else about one slide per
   minute of `audience.minutes` (Q&A time is extra), never fewer than 6.
-- Choose **presenter mode** (live talk, ≤ 25 words per content slide) unless the deck is mainly read without a speaker
-  (then document mode, ≤ 75 words). Never mix.
+- Choose **presenter mode** (live talk) unless the deck is mainly read without a speaker (then document mode). Never mix.
+  The word budgets for each are in the numbers table in `CLAUDE.md`.
 - One idea per slide, headline ≤ 10 words that states the point ("Moisture control saved 34% water", not "Results").
 - Give each slide a time (`data-minutes`) so the times add up to the talk length.
 - Pick the visual for every slide now: which illustration, which real figure or photo, which slide (if any) is 3D.
-- Write the plan to `.aura/temp/plan.md` (one line per slide: number, kind, minutes, headline, visual, source).
-  Tell the user the plan in a few short lines (titles only) and carry on; they can change anything later in the editor.
+- Keep the outline in your own notes, `.aura/temp/plan.md` (one line per slide: number, kind, minutes, headline, visual,
+  source). Tell the user the plan in a few short lines (titles only) and carry on; they can change anything later in the editor.
 
 ## 5. Choose the look
 - `look.theme` names one of the five Aura themes → use it. "Claude chooses" (or empty) → pick the theme that suits the
   topic and audience (see the guide in `deck-toolkit.md`) and tell the user which one you picked and why, in one line.
-- Read `aura-blend.md`, the theme's brand file (`brands/<name>/brand-style.md`; Bold Blue uses power-design's
-  `brands/coinbase`) and the theme stylesheet `.aura/engine/deck/themes/<theme>.css`. Their logo or university
-  template (in `Logo and university template/`) may add their logo and colours inside the theme's rules.
+- **Bold Blue → read `looks/bold-blue/LOOK.md` first, whole, every time.** It is the look's authority: tokens,
+  the archetype menu (`node .aura/engine/tools/new_deck.js --snippet list`), the 3D and chart recipes, the writing
+  voice, the speaker-notes rules and the clash matrix. It overrides the form's visual choices, `aura-blend.md` and
+  `deck-toolkit.md` wherever they differ; Bold Blue has no brand file.
+- Any other look: read `aura-blend.md`, the theme's brand file (`brands/<name>/brand-style.md`) and the theme
+  stylesheet `.aura/engine/deck/themes/<theme>.css`. (Other looks may later get their own `looks/<look>/LOOK.md`; when
+  one exists, it is the authority for that look in the same way.)
+- Their logo or university template (in `Logo and university template/`) may add their logo inside the look's rules.
 
 ## 6. Build the deck
 `[[aura:stage=build]]`  Read `deck-toolkit.md` first, every time.
@@ -173,43 +213,47 @@ Reply in this shape, filled with their details:
 
   `twoD` = no → still illustrate, but no looping motion (gentle entrances only). `threeD` = no → no 3D at all.
   3D only where depth helps understanding (a device, a structure, a field), never as decoration.
+  For every 3D slide first decide what the subject really is and show IT in its own setting (LOOK.md 4.0: a vehicle in
+  flight, a cell, a building...), never a default lab bench with a wooden base, gauge or vial unless the subject is
+  that; vary props and camera between slides and decks. Bold Blue's closing slide is designed per deck (LOOK.md section 2).
 - Include what `content.include` asks for (references in `content.citations` style, thank-you / questions slide…).
-- Respect `extra.avoid` and `extra.notes`. Keep to the facts: never invent data, names or citations.
+- Respect `extra.avoid` and `extra.notes`. Keep to the facts: never invent data, names or citations. Every number on a slide is in the
+  user's files or declared in `provenance.json` (`building.md` rule 8) and in the speaker notes; a number read off a figure is kind
+  `figure`, and you never crop away the part of the figure it came from. `deck_check` fails numbers it cannot trace.
 
 ## 7. Check and fix until clean
 `[[aura:stage=check]]`
 - Run `node .aura/engine/tools/deck_check.js .aura/temp/build/<slug>` (add `--notes` when speaker notes were asked
-  for). It prints errors and warnings per slide and saves pictures to `.aura/temp/shots/<slug>/`.
+  for; `--mode document` only for a deck meant to be read). It prints errors and warnings per slide and saves pictures to
+  `.aura/temp/shots/<slug>/`.
 - **Look at the pictures**: open `overview.png`, then every slide that has a problem or a 3D / complex illustration.
   Check what the numbers cannot: balance, alignment, the focal point, text sitting well on the art, the look's device.
-- Fix every ERROR. Fix warnings unless you have a good reason (say why in `.aura/temp/plan.md`). Run the check again.
-  Repeat until it prints `RESULT: clean` and the pictures look right (usually 2–4 rounds).
+- Fix every ERROR. Fix warnings unless you have a good reason; a warning you leave is named in your reply to the person in
+  one plain sentence (not in a hidden file). Run the check again. Repeat until it prints `RESULT: clean` and the pictures
+  look right (usually 2–4 rounds).
 - Before packing, run `node .aura/engine/tools/new_deck.js --ids .aura/temp/build/<slug>` once more.
 
-## 8. Pack it into one file
+## 8. Pack it
 `[[aura:stage=export]]`
-- `.aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py .aura/temp/build/<slug> --title "<Title>"`
-  → `4 - Your slides/<Title>.html`, one file that works offline. If an older deck with that name exists, the packer
-  moves it (and its backups) to `4 - Your slides/Older versions/` with the date first.
-- Check the packed file once: `node .aura/engine/tools/deck_check.js "4 - Your slides/<Title>.html" --no-shots`.
+- Pack where "Where you write" in `CLAUDE.md` says. With a `[deck-folder .aura/decks/<id>]` line (the usual case):
+  `.aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py .aura/temp/build/<slug> --title "<Title>" --out ".aura/decks/<id>" --replace`,
+  and no PDF / PowerPoint / speaker-note backups: Finalize makes the HTML and PDF, and the finalize screen has a button for the
+  PowerPoint copy.
+- Old one-shot start (no deck-folder line): the same command without `--out` writes `4 - Your slides/<Title>.html`; an older deck
+  with that name moves to `4 - Your slides/Older versions/` with the date first. Then follow `delivery.backups` / `delivery.help`
+  (`deck-toolkit.md`, "Backups"): PDF → `export_pdf.js`, PowerPoint → `export_pptx.py`, speaker notes Word file →
+  `export_notes.py` (`--timed` for a timed script); speaker notes are always inside the deck (press N while presenting).
+- Check the packed file once: `node .aura/engine/tools/deck_check.js "<packed file>" --no-shots`.
 
-## 9. Backups and speaker help
-Follow `delivery.backups` and `delivery.help` (see `deck-toolkit.md`, "Backups"):
-- PDF → `node .aura/engine/tools/export_pdf.js "4 - Your slides/<Title>.html"`
-- PowerPoint → `.aura/venv/Scripts/python.exe .aura/engine/tools/export_pptx.py "4 - Your slides/<Title>.html"`
-- Speaker notes are always inside the deck (press N while presenting). If they asked for speaker notes or a timed
-  script, also make the Word file: `.aura/venv/Scripts/python.exe .aura/engine/tools/export_notes.py "4 - Your slides/<Title>.html"`
-  (add `--timed` for a timed script).
-
-## 10. Finish
+## 9. Finish
 `[[aura:stage=done]]`
 Give a short, warm summary: the file name, number of slides and planned time, the look (and why, if you chose it),
 which backups you made, and how to present: "press **present** in the app (or double-click the file), **F** for full
 screen, arrows or a clicker to move, **N** for your notes, **P** for a presenter window on a second screen". Mention
-anything they should check (for example a number you could not find). Invite changes: "Pick a slide in the editor and
-tell me what to change."
-Then 3–5 `[[aura:hint …]]` lines, and the last line `[[aura:done path="4 - Your slides/<Title>.html"]]`.
+anything they should check (for example a number you could not find, or a warning you left). Invite changes: "Pick a slide in
+the editor and tell me what to change."
+Then 3–5 `[[aura:hint …]]` lines, and the last line `[[aura:done path="<the packed file>"]]`.
 
 ## When they ask for changes later
 Read `editing.md` and follow it: change only what they asked in the build folder, re-check, re-pack to the same
-file, refresh the backups that already exist, then a short reply, new hints and the done line.
+file, then a short reply, new hints and the done line.

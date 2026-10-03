@@ -1,0 +1,949 @@
+{
+ "note": "Shared fixtures for the marker grammar (engine/rules/markers.json). aura_markers.scan (Python) and markers.js scanMarkers (browser) must both reproduce markers + problems exactly; tools/form-dev/test_instructions.py runs both.",
+ "cases": [
+  {
+   "name": "stage ok",
+   "text": "[[aura:stage=read]]",
+   "markers": [
+    {
+     "name": "stage",
+     "attrs": {
+      "value": "read"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "stage with spaces around",
+   "text": "   [[aura:stage=build]]   ",
+   "markers": [
+    {
+     "name": "stage",
+     "attrs": {
+      "value": "build"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "stage unknown value",
+   "text": "[[aura:stage=cook]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "bad-value",
+     "marker": "stage"
+    }
+   ]
+  },
+  {
+   "name": "stage written like attributes",
+   "text": "[[aura:stage=\"read\"]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "bad-attrs",
+     "marker": "stage"
+    }
+   ]
+  },
+  {
+   "name": "ask ok",
+   "text": "Which one?\n[[aura:ask]]",
+   "markers": [
+    {
+     "name": "ask",
+     "attrs": {},
+     "line": 2
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "ask inside a sentence",
+   "text": "I will wait [[aura:ask]] for you",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "not-alone",
+     "marker": "ask"
+    }
+   ]
+  },
+  {
+   "name": "ask with a trailing word",
+   "text": "[[aura:ask]] thanks",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "not-alone",
+     "marker": "ask"
+    }
+   ]
+  },
+  {
+   "name": "done ok",
+   "text": "[[aura:done path=\".aura/decks/abc/My deck.html\"]]",
+   "markers": [
+    {
+     "name": "done",
+     "attrs": {
+      "path": ".aura/decks/abc/My deck.html"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "done without path",
+   "text": "[[aura:done]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "missing-path",
+     "marker": "done"
+    }
+   ]
+  },
+  {
+   "name": "done with an unquoted path",
+   "text": "[[aura:done path=.aura/decks/abc/x.html]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "bad-attrs",
+     "marker": "done"
+    }
+   ]
+  },
+  {
+   "name": "choice, all quoted",
+   "text": "[[aura:choice id=\"q1\" question=\"Which result should open the talk?\" options=\"34% water saved|Three times faster|Lower cost\" multi=\"no\" default=\"Three times faster\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q1",
+      "question": "Which result should open the talk?",
+      "options": "34% water saved|Three times faster|Lower cost",
+      "multi": "no",
+      "default": "Three times faster"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q1",
+      "question": "Which result should open the talk?",
+      "options": [
+       "34% water saved",
+       "Three times faster",
+       "Lower cost"
+      ],
+      "multi": false,
+      "default": [
+       "Three times faster"
+      ],
+      "slide": "",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, bare values",
+   "text": "[[aura:choice id=q1 question=\"Which?\" options=\"A|B\" multi=no default=B slide=3]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q1",
+      "question": "Which?",
+      "options": "A|B",
+      "multi": "no",
+      "default": "B",
+      "slide": "3"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q1",
+      "question": "Which?",
+      "options": [
+       "A",
+       "B"
+      ],
+      "multi": false,
+      "default": [
+       "B"
+      ],
+      "slide": "3",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, attributes in any order",
+   "text": "[[aura:choice default=\"B\" options=\"A|B\" slide=\"s3\" question=\"Which?\" id=\"q9\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "default": "B",
+      "options": "A|B",
+      "slide": "s3",
+      "question": "Which?",
+      "id": "q9"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q9",
+      "question": "Which?",
+      "options": [
+       "A",
+       "B"
+      ],
+      "multi": false,
+      "default": [
+       "B"
+      ],
+      "slide": "s3",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, when and depends",
+   "text": "[[aura:choice id=\"q2\" slide=3 when=\"q1=2 & q3=Left|Right\" depends=\"q1, q3\" question=\"Which words?\" options=\"a|b|c\" multi=\"yes\" default=\"a|c\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q2",
+      "slide": "3",
+      "when": "q1=2 & q3=Left|Right",
+      "depends": "q1, q3",
+      "question": "Which words?",
+      "options": "a|b|c",
+      "multi": "yes",
+      "default": "a|c"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q2",
+      "question": "Which words?",
+      "options": [
+       "a",
+       "b",
+       "c"
+      ],
+      "multi": true,
+      "default": [
+       "a",
+       "c"
+      ],
+      "slide": "3",
+      "scope": "",
+      "when": "q1=2 & q3=Left|Right",
+      "depends": [
+       "q1",
+       "q3"
+      ]
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, scope deck",
+   "text": "[[aura:choice id=\"q1\" scope=\"DECK\" question=\"Who is in the room?\" options=\"Examiners|Classmates\" default=\"Classmates\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q1",
+      "scope": "DECK",
+      "question": "Who is in the room?",
+      "options": "Examiners|Classmates",
+      "default": "Classmates"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q1",
+      "question": "Who is in the room?",
+      "options": [
+       "Examiners",
+       "Classmates"
+      ],
+      "multi": false,
+      "default": [
+       "Classmates"
+      ],
+      "slide": "",
+      "scope": "deck",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, no multi and no default",
+   "text": "[[aura:choice id=\"q1\" question=\"Which look?\" options=\"Bold Blue|Flat-Pack|Claude chooses\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q1",
+      "question": "Which look?",
+      "options": "Bold Blue|Flat-Pack|Claude chooses"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q1",
+      "question": "Which look?",
+      "options": [
+       "Bold Blue",
+       "Flat-Pack",
+       "Claude chooses"
+      ],
+      "multi": false,
+      "default": [
+       "Bold Blue"
+      ],
+      "slide": "",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, default not among the options",
+   "text": "[[aura:choice id=\"q1\" question=\"Which?\" options=\"A|B|C\" default=\"Z\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q1",
+      "question": "Which?",
+      "options": "A|B|C",
+      "default": "Z"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q1",
+      "question": "Which?",
+      "options": [
+       "A",
+       "B",
+       "C"
+      ],
+      "multi": false,
+      "default": [
+       "A"
+      ],
+      "slide": "",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, multi keeps several defaults",
+   "text": "[[aura:choice id=\"q1\" question=\"Which?\" options=\"A|B|C\" multi=\"yes\" default=\"C|A|Z\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q1",
+      "question": "Which?",
+      "options": "A|B|C",
+      "multi": "yes",
+      "default": "C|A|Z"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q1",
+      "question": "Which?",
+      "options": [
+       "A",
+       "B",
+       "C"
+      ],
+      "multi": true,
+      "default": [
+       "C",
+       "A"
+      ],
+      "slide": "",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, nine options are cut to eight",
+   "text": "[[aura:choice id=\"q1\" question=\"Which?\" options=\"1|2|3|4|5|6|7|8|9\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q1",
+      "question": "Which?",
+      "options": "1|2|3|4|5|6|7|8|9"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q1",
+      "question": "Which?",
+      "options": [
+       "1",
+       "2",
+       "3",
+       "4",
+       "5",
+       "6",
+       "7",
+       "8"
+      ],
+      "multi": false,
+      "default": [
+       "1"
+      ],
+      "slide": "",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, long question is cut",
+   "text": "[[aura:choice id=\"q1\" question=\"QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ\" options=\"A|B\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q1",
+      "question": "QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ",
+      "options": "A|B"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q1",
+      "question": "QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ",
+      "options": [
+       "A",
+       "B"
+      ],
+      "multi": false,
+      "default": [
+       "A"
+      ],
+      "slide": "",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, question with brackets and an equals sign",
+   "text": "[[aura:choice id=\"q1\" question=\"Is a=b [ok]?\" options=\"Yes|No\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q1",
+      "question": "Is a=b [ok]?",
+      "options": "Yes|No"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q1",
+      "question": "Is a=b [ok]?",
+      "options": [
+       "Yes",
+       "No"
+      ],
+      "multi": false,
+      "default": [
+       "Yes"
+      ],
+      "slide": "",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "choice, missing options",
+   "text": "[[aura:choice id=\"q1\" question=\"Which?\"]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "missing-options",
+     "marker": "choice"
+    }
+   ]
+  },
+  {
+   "name": "choice, one option only",
+   "text": "[[aura:choice id=\"q1\" question=\"Which?\" options=\"Only\"]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "few-options",
+     "marker": "choice"
+    }
+   ]
+  },
+  {
+   "name": "choice, id with a space",
+   "text": "[[aura:choice id=\"q 1\" question=\"Which?\" options=\"A|B\"]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "bad-id",
+     "marker": "choice"
+    }
+   ]
+  },
+  {
+   "name": "choice, unreadable text between attributes",
+   "text": "[[aura:choice id=q1 question=Which one options=\"A|B\"]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "bad-attrs",
+     "marker": "choice"
+    }
+   ]
+  },
+  {
+   "name": "choice, repeated attribute: the last one wins",
+   "text": "[[aura:choice id=\"q1\" id=\"q2\" question=\"Which?\" options=\"A|B\"]]",
+   "markers": [
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q2",
+      "question": "Which?",
+      "options": "A|B"
+     },
+     "line": 1,
+     "choice": {
+      "id": "q2",
+      "question": "Which?",
+      "options": [
+       "A",
+       "B"
+      ],
+      "multi": false,
+      "default": [
+       "A"
+      ],
+      "slide": "",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "hint ok",
+   "text": "[[aura:hint slide=3 text=\"Turn the three numbers into one bar picture\"]]",
+   "markers": [
+    {
+     "name": "hint",
+     "attrs": {
+      "slide": "3",
+      "text": "Turn the three numbers into one bar picture"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "hint, text first (any order)",
+   "text": "[[aura:hint text=\"Shorter headline\" slide=3]]",
+   "markers": [
+    {
+     "name": "hint",
+     "attrs": {
+      "text": "Shorter headline",
+      "slide": "3"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "hint, quoted slide",
+   "text": "[[aura:hint slide=\"2\" text=\"Add a source\"]]",
+   "markers": [
+    {
+     "name": "hint",
+     "attrs": {
+      "slide": "2",
+      "text": "Add a source"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "hint, slide is a plan id",
+   "text": "[[aura:hint slide=\"s3\" text=\"Add a source\"]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "bad-value",
+     "marker": "hint"
+    }
+   ]
+  },
+  {
+   "name": "hint, slide zero",
+   "text": "[[aura:hint slide=0 text=\"x\"]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "bad-value",
+     "marker": "hint"
+    }
+   ]
+  },
+  {
+   "name": "hint, no text",
+   "text": "[[aura:hint slide=3]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "missing-text",
+     "marker": "hint"
+    }
+   ]
+  },
+  {
+   "name": "plan with a path",
+   "text": "[[aura:plan path=\".aura/decks/abc/plan.json\"]]",
+   "markers": [
+    {
+     "name": "plan",
+     "attrs": {
+      "path": ".aura/decks/abc/plan.json"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "plan without a path",
+   "text": "[[aura:plan]]",
+   "markers": [
+    {
+     "name": "plan",
+     "attrs": {},
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "plan-ok",
+   "text": "[[aura:plan-ok slide=\"s3\"]]",
+   "markers": [
+    {
+     "name": "plan-ok",
+     "attrs": {
+      "slide": "s3"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "plan-ok, bare id",
+   "text": "[[aura:plan-ok slide=s3]]",
+   "markers": [
+    {
+     "name": "plan-ok",
+     "attrs": {
+      "slide": "s3"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "plan-ok without slide",
+   "text": "[[aura:plan-ok]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "missing-slide",
+     "marker": "plan-ok"
+    }
+   ]
+  },
+  {
+   "name": "built",
+   "text": "[[aura:built slide=\"s3\"]]",
+   "markers": [
+    {
+     "name": "built",
+     "attrs": {
+      "slide": "s3"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "built with a number",
+   "text": "[[aura:built slide=3]]",
+   "markers": [
+    {
+     "name": "built",
+     "attrs": {
+      "slide": "3"
+     },
+     "line": 1
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "unknown marker",
+   "text": "[[aura:celebrate]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "unknown",
+     "marker": "celebrate"
+    }
+   ]
+  },
+  {
+   "name": "unclosed marker",
+   "text": "[[aura:ask",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "unclosed",
+     "marker": "ask"
+    }
+   ]
+  },
+  {
+   "name": "unclosed choice",
+   "text": "[[aura:choice id=\"q1\" question=\"Which?\" options=\"A|B\"",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "unclosed",
+     "marker": "choice"
+    }
+   ]
+  },
+  {
+   "name": "two markers on one line",
+   "text": "[[aura:ask]] [[aura:done path=\"a.html\"]]",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "not-alone",
+     "marker": "ask"
+    }
+   ]
+  },
+  {
+   "name": "a marker quoted in a sentence",
+   "text": "Use the line [[aura:ask]] when you wait.",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "not-alone",
+     "marker": "ask"
+    }
+   ]
+  },
+  {
+   "name": "CRLF line endings",
+   "text": "Hello\r\n[[aura:stage=plan]]\r\n[[aura:ask]]\r\n",
+   "markers": [
+    {
+     "name": "stage",
+     "attrs": {
+      "value": "plan"
+     },
+     "line": 2
+    },
+    {
+     "name": "ask",
+     "attrs": {},
+     "line": 3
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "a whole message",
+   "text": "Here is my plan.\n[[aura:stage=plan]]\nTwo questions:\n[[aura:choice id=\"q1\" scope=\"deck\" question=\"Who?\" options=\"A|B\" default=\"A\"]]\n  [[aura:choice id=\"q2\" slide=\"s3\" question=\"Which?\" options=\"C|D\" default=\"D\"]]\nI am [[aura:ask]] now\n[[aura:hint slide=1 text=\"Do it\"]]\n[[aura:ask]]",
+   "markers": [
+    {
+     "name": "stage",
+     "attrs": {
+      "value": "plan"
+     },
+     "line": 2
+    },
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q1",
+      "scope": "deck",
+      "question": "Who?",
+      "options": "A|B",
+      "default": "A"
+     },
+     "line": 4,
+     "choice": {
+      "id": "q1",
+      "question": "Who?",
+      "options": [
+       "A",
+       "B"
+      ],
+      "multi": false,
+      "default": [
+       "A"
+      ],
+      "slide": "",
+      "scope": "deck",
+      "when": "",
+      "depends": []
+     }
+    },
+    {
+     "name": "choice",
+     "attrs": {
+      "id": "q2",
+      "slide": "s3",
+      "question": "Which?",
+      "options": "C|D",
+      "default": "D"
+     },
+     "line": 5,
+     "choice": {
+      "id": "q2",
+      "question": "Which?",
+      "options": [
+       "C",
+       "D"
+      ],
+      "multi": false,
+      "default": [
+       "D"
+      ],
+      "slide": "s3",
+      "scope": "",
+      "when": "",
+      "depends": []
+     }
+    },
+    {
+     "name": "hint",
+     "attrs": {
+      "slide": "1",
+      "text": "Do it"
+     },
+     "line": 7
+    },
+    {
+     "name": "ask",
+     "attrs": {},
+     "line": 8
+    }
+   ],
+   "problems": [
+    {
+     "line": 6,
+     "reason": "not-alone",
+     "marker": "ask"
+    }
+   ]
+  },
+  {
+   "name": "the same bad line twice is reported once",
+   "text": "see [[aura:ask]] here\nsee [[aura:ask]] here",
+   "markers": [],
+   "problems": [
+    {
+     "line": 1,
+     "reason": "not-alone",
+     "marker": "ask"
+    }
+   ]
+  }
+ ]
+}

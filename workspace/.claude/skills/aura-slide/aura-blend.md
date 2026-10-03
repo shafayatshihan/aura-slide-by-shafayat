@@ -1,22 +1,22 @@
 # Aura Blend — how Lumi styles a deck
 
 Aura Blend sits on top of power-design. Power-design's 20 slide rules still apply, except for the one override below.
-The HARD RULES in `.claude/CLAUDE.md` (no text under 26 px) beat everything.
+The HARD RULES in `.claude/CLAUDE.md` (the text floor and the other numbers in its table) beat everything.
 Aura Blend adds three things: a type blend, a colour blend, and one signature style device per theme.
 
 ## Override of power-design's Font Pairing rule
-The downloaded power-design rulebook says "maximum 2 typefaces per deck". **In Lumi the limit is 4.**
-This is the owner's rule, and it applies in this folder even though the rulebook file says 2.
+Power-design's Font Pairing rule says "maximum 2 typefaces per deck". **In Lumi the limit is the one in the numbers table in
+`.claude/CLAUDE.md`** (4; a look may allow fewer, Bold Blue 2). This is the owner's rule and it applies in this folder.
 
 ## 1. Type: up to four voices, one job each
-- **1–4 typefaces per deck.** Each has one fixed role for the whole deck:
+- **Typefaces per deck: within the limit above.** Each has one fixed role for the whole deck:
   1. **display:** headline
   2. **text:** body
   3. **label (optional):** kicker, captions, numbers; usually a mono
   4. **emphasis (optional):** a second display voice for one short phrase
 - Any two must clearly differ: serif vs sans vs mono, a different width, or a different weight personality.
   Two look-alike sans-serifs are not a blend.
-- Sizes: 28 / 36 / 48 / 64 / 84 / 112 px (modular 1.333, floor 28). At most 3–4 sizes per slide.
+- Sizes: the type scale of the numbers table in `.claude/CLAUDE.md`. At most 3–4 sizes per slide.
 - Emphasis inside a headline goes on **one phrase of 1–3 words**, using the theme's device.
   Never more than one emphasis per slide.
 - **Fonts must have a public licence:** SIL Open Font License, Apache 2.0, or CC BY with credit.
@@ -57,18 +57,18 @@ numbers are illustrative.
 | # | Theme | Brand DNA | Fonts (all public licence) | Colour blend | Signature device |
 |---|---|---|---|---|---|
 | 1 | **Pink Punch** | Gumroad | Anton (display, uppercase) + Work Sans (text) | cream canvas · pink block · yellow, orange, teal, red pops | black outlines + hard 8 px black shadow, pill kicker, pink highlighter on one phrase |
-| 2 | **Bold Blue** | Coinbase | Plus Jakarta Sans 800 (display) + Work Sans (text) | pure white · Coinbase blue block · black | flat geometric (Bauhaus) shapes; blue emphasis phrase |
+| 2 | **Bold Blue** | the owner's reference deck (measured, not a brand site) | Poppins (everything) + DM Mono (page numbers) | warm off-white `#F9F4F2` · ink `#2D2C2B` · ONE blue `#0061EF` phrase per headline · orange `#FF7E1D` identity dot | photoreal studio 3D (soft shadows, real materials, reflections) beside a stat stack; hand-drawn SVG charts. **Its own authority: `looks/bold-blue/LOOK.md`** |
 | 3 | **Flat-Pack** | IKEA | Noto Sans 800 (display) + Noto Sans 400 (text) | pure white · grey card · IKEA blue · IKEA yellow | flat-pack assembly manual (numbered steps, parts with "6x", the happy figure), yellow price-tag kicker, blue emphasis phrase |
 | 4 | **Happy Headspace** | Headspace | Quicksand 700 (display) + DM Sans (text) + Reno Mono (label) | pure white · **orange first**, then gold, amber, purple, teal-navy; pink only as a rare small accent | soft round shapes and blobs, **no faces** (decks are often formal), gold pill kicker, orange squiggle underline |
 | 5 | **Yellow Frame** | National Geographic | Source Serif 4 (display) + Open Sans (text, uppercase label) | pure white · the yellow border · **black as the signature ink**: black label tags with white capitals, a heavy black rule above the kicker, black pipes, arrows and data marks; **never a dark background** | a bright daylight documentary illustration inside the thick yellow rectangle; yellow-rectangle mark before the kicker |
 
 Brand files:
-- power-design library: `brands/coinbase`
+- Bold Blue has no brand file: it follows `looks/bold-blue/LOOK.md`, which overrides this file where they differ.
 - this skill folder: `brands/gumroad`, `brands/headspace`, `brands/ikea`, `brands/national-geographic`.
   IKEA and National Geographic were extracted with Firecrawl.
 
 ## Font licences (engine/fonts)
-- **SIL Open Font License:** Anton, Plus Jakarta Sans, DM Sans, Noto Sans, Source Serif 4, Open Sans, Work Sans, Quicksand.
+- **SIL Open Font License:** Anton, Plus Jakarta Sans, DM Sans, Noto Sans, Source Serif 4, Open Sans, Work Sans, Quicksand, Poppins, DM Mono, Epilogue.
 - **CC BY 4.0:** Reno Mono. Credit "Reno Mono by Renaud Futterer" wherever the fonts are listed.
 
 All of these may be embedded in slides and shared.

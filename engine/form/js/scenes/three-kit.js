@@ -51,7 +51,7 @@ export function listen(target, type, fn, opts) {
   return () => target.removeEventListener(type, fn, opts);
 }
 
-export function div(css, parent, cls) {
+function div(css, parent, cls) {
   const d = document.createElement('div');
   if (cls) d.className = cls;
   if (css) d.style.cssText = css;
@@ -80,10 +80,6 @@ export async function loadThree(ctx) {
     return null;
   }
 }
-
-export const prefersReducedMotion = () => {
-  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
-};
 
 let liveHandle = null;
 
@@ -294,7 +290,7 @@ export function disposeTree(root) {
 }
 
 // Centered rounded rectangle as a THREE.Shape (or Path when asHole).
-export function roundedRect(THREE, w, h, r, asHole = false) {
+function roundedRect(THREE, w, h, r, asHole = false) {
   const s = asHole ? new THREE.Path() : new THREE.Shape();
   const x = -w / 2, y = -h / 2;
   r = Math.min(r, w / 2, h / 2);
@@ -339,13 +335,6 @@ export function sparkleShape(THREE, inner = 0.28) {
   }
   s.closePath();
   return s;
-}
-
-// World point -> container pixel coordinates (x right, y down).
-export function toScreen(v, camera, w, h, out = { x: 0, y: 0, z: 0 }) {
-  const p = v.clone().project(camera);
-  out.x = (p.x + 1) / 2 * w; out.y = (1 - p.y) / 2 * h; out.z = p.z;
-  return out;
 }
 
 // Draws a rounded rectangle path on a 2D canvas context.

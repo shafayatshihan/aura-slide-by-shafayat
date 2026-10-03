@@ -1,0 +1,48 @@
+<!-- archetype: comparison-twin | two numbered reasons + two versions side by side in ONE 3D scene | main visual: 3D | companions: 2 numbered stats, two pills, one close line -->
+<section class="slide bb-stage-bg" data-kind="content" data-minutes="1.5" data-title="Comparison">
+  <div class="safe">
+    <div class="bb-main">
+      <div class="bb-l w5">
+        <p class="kicker" data-edit="s{{N}}-1">06 · Why it matters</p>
+        <h2 class="headline" data-edit="s{{N}}-2">One change <span class="em">pays twice</span></h2>
+        <ol class="bb-steps">
+          <li><span class="bb-n">1</span><div><div class="bb-stat" data-edit="s{{N}}-3"><span data-bb-count>45</span>&nbsp;°C</div><p data-edit="s{{N}}-4">the first gain, <b>in plain words</b></p></div></li>
+          <li><span class="bb-n">2</span><div><div class="bb-stat" data-edit="s{{N}}-5">100&nbsp;%</div><p data-edit="s{{N}}-6">the second gain, <b>in plain words</b></p></div></li>
+        </ol>
+        <p class="close-line" data-edit="s{{N}}-7">An easier start, and <b>a cleaner finish</b>.</p>
+      </div>
+      <div class="bb-r w7">
+        <div class="bb-stage">
+          <div class="aura-3d bb-3d" data-scene="s{{N}}-scene" data-period="12" role="img" aria-label="Two versions side by side: describe the difference you can see.">
+            <div class="bb-pill" data-follow="l" data-align="center"><b data-edit="s{{N}}-8">Before</b></div>
+            <div class="bb-pill blue" data-follow="r" data-align="center"><b data-edit="s{{N}}-9">After</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="bb-foot"><span class="bb-mark" data-edit="s{{N}}-10">Deck mark</span><span class="bb-pageno"></span></footer>
+  </div>
+  <aside class="notes" data-aura-notes>
+    <p>Point at the left version first, then the right, and name the one thing that differs between them.</p>
+    <p>Then read the two numbered reasons, and say where each number comes from.</p>
+    <p>Honesty caveat: both models move the way the physics says they should, but slowed down so the eye can follow.</p>
+  </aside>
+</section>
+<script>
+Aura.scene('s{{N}}-scene', (ctx) => {
+  const { THREE } = ctx, P = ctx.period;
+  const S = BB3D.studio(ctx, { target: [0, 1.4, 0], distance: 11, azimuth: -12, elevation: 12, post: { bloom: true } });
+  const M = BB3D.materials(THREE);
+  const mk = (x) => { const g = new THREE.Group(); g.position.x = x;
+    g.add(BB3D.lathe(THREE, [[0, 0], [0.45, 0], [0.45, 2.6], [0, 2.6]], M.glass));
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 16), M.water); s.position.y = 0.6; g.add(s); g.userData.s = s; return g; };
+  const L = mk(-1.6), R = mk(1.6); S.add(L, R);
+  BB3D.labels(S, ctx.el, { l: [-1.6, 3.2, 0], r: [1.6, 3.2, 0] });
+  return S.api({ update(t) {
+    const w = BBTime.phase(t, P);
+    S.orbit(t, { swayAz: 4 });
+    L.userData.s.position.y = 0.6 + 0.05 * Math.sin(w);                                  // barely moves
+    R.userData.s.position.y = 1.3 + 0.6 * Math.sin(w) + 0.2 * Math.sin(3 * w + 0.4);      // moves freely
+  } });
+}, { period: 12 });
+</script>

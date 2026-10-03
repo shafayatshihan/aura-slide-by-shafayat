@@ -1,5 +1,5 @@
 # Publish Lumi to GitHub in one go: save (commit) every change, upload (push) it, then wait while GitHub
-# builds Lumi-Setup.zip onto the release (.github/workflows/release.yml).
+# builds Lumi-Setup.zip onto the release (.github/workflows/release.yml) - but only when you answer y to "Release now?" (a v<version> tag is pushed). A plain push never releases.
 # First run only: installs GitHub CLI if missing, signs in through the browser, creates the public repo.
 # Started by "Publish to GitHub.bat". ASCII-only on purpose (Windows PowerShell 5.1).
 # Continue, not Stop: in PowerShell 5.1 any text a program writes to stderr (gh, git progress) becomes an error record,
@@ -58,7 +58,7 @@ $new = Read-Host "  Version for users is $ver. New version? (e.g. 0.2.0 / Enter 
 if ($new -match '^\d+\.\d+\.\d+$' -and $new -ne $ver) {
   $cfgText = $cfgText -replace ('"version"\s*:\s*"' + [regex]::Escape($ver) + '"'), ('"version": "' + $new + '"')
   [IO.File]::WriteAllText($cfgPath, $cfgText, (New-Object Text.UTF8Encoding $false)); $ver = $new
-  Say "  Version set to $ver (a new release will be made)." 'Green'
+  Say "  Version set to $ver (it is released only if you answer y at the end)." 'Green'
 }
 
 # ---- commit
@@ -87,7 +87,22 @@ if (-not (Quiet "gh repo view $Slug")) {
   if (-not (Show 'git push -u origin main')) { Stop-Here 'Upload failed. Check your internet and run this again.' }
 }
 
-# ---- wait for GitHub to build the download
+# ---- release (only on purpose: a push alone never releases; the workflow runs on a v<version> tag)
+Say ''
+if ($ver -notmatch '^\d+\.\d+\.\d+$') {
+  Say "  Uploaded. Version $ver is a work-in-progress version, so nothing was released." 'Green'
+  Say '  To release: set a plain version like 0.5.0 (run this again and type it), then answer y below.' 'Gray'
+  Say ''; Read-Host '  Press Enter to close'; exit 0
+}
+if (Quiet "gh release view v$ver --repo $Slug") {
+  Say "  Uploaded. Release v$ver already exists and will NOT be overwritten. To publish new files, choose a new version." 'Yellow'
+  Say ''; Read-Host '  Press Enter to close'; exit 0
+}
+if ((Read-Host "  Release version $ver to users now? (y / Enter = no, just keep the upload)") -notmatch '^[yY]') {
+  Say '  Uploaded. No release made.' 'Green'; Say ''; Read-Host '  Press Enter to close'; exit 0
+}
+if (-not (Quiet "git rev-parse -q --verify refs/tags/v$ver")) { Git tag "v$ver" }
+if (-not (Show "git push origin v$ver")) { Stop-Here 'Could not upload the release tag.' }
 Say ''; Say '  GitHub is building Lumi-Setup.zip (about 1 minute)...' 'Cyan'
 Start-Sleep -Seconds 6
 $run = (& gh run list --repo $Slug --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>$null)

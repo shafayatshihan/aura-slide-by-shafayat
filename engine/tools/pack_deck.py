@@ -354,6 +354,9 @@ def main():
         tmp = target.with_name(target.name + '.part')
         tmp.write_text(html, encoding='utf-8', newline='\n')
         os.replace(tmp, target)
+        prov = src.parent / 'provenance.json'          # B-05: the record of where every number came from travels with the deck
+        if prov.is_file():
+            shutil.copyfile(prov, out_dir / ('provenance.json' if out_dir.name != '4 - Your slides' else stem + '.provenance.json'))
     except PackError as e:
         print('Could not pack the deck: ' + str(e))
         return 1

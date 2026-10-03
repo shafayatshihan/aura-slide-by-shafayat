@@ -201,8 +201,13 @@ function lerpAngle(a, b, t) {
 }
 
 // ---------------------------------------------------------------- 3D renderer
+// createRenderer() allocates a WebGL context; if building the scene throws, release it here (nothing else can).
 function create3D(THREE, root, m, onEvict) {
   const gl = createRenderer(THREE, root, { maxPixels: 2.3e6, onEvict });
+  try { return build3D(THREE, root, m, onEvict, gl); } catch (e) { try { gl.dispose(); } catch (e2) { /* ignore */ } throw e; }
+}
+
+function build3D(THREE, root, m, onEvict, gl) {
   const kit = createKit(THREE);
   const scene = new THREE.Scene();
   const D = 1800;
@@ -581,6 +586,8 @@ export default {
       const W = el.clientWidth || BW, H = el.clientHeight || BH;
       const busy = step(m, dt, W, H);
       view.render(m.t);
+      // Decision (X-08): the welcome screen deliberately animates continuously (breathing scene) unless the user
+      // prefers reduced motion; every other scene idles when nothing moves.
       return busy || !reduced;
     };
     const use2D = () => {

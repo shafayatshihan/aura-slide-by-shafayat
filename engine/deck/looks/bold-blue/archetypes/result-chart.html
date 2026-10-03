@@ -1,0 +1,43 @@
+<!-- archetype: result-chart | one 2D line chart (hand-drawn SVG via BBChart) + three finding chips | main visual: chart | companions: <=3 chips. Real data needs a source line; with no data draw an "illustrative" shape (no y numbers). Never invent values. -->
+<section class="slide" data-kind="content" data-minutes="2" data-title="What we found">
+  <div class="bb-orb" aria-hidden="true" style="left:-110px; top:-80px; width:260px; height:260px"></div>
+  <svg class="bb-spark" viewBox="0 0 100 100" aria-hidden="true" style="left:1832px; top:840px"><path d="M50 0 C54 34 66 46 100 50 C66 54 54 66 50 100 C46 66 34 54 0 50 C34 46 46 34 50 0Z" fill="#0061EF"/></svg>
+  <div class="safe">
+    <div class="bb-main">
+      <div class="bb-l w4">
+        <p class="kicker" data-edit="s{{N}}-1">10 · What we found</p>
+        <h2 class="headline" data-edit="s{{N}}-2">Smooth, then <span class="em">suddenly jagged</span></h2>
+        <ul class="bb-chips">
+          <li class="bb-chip" data-edit="s{{N}}-3">First finding</li>
+          <li class="bb-chip" data-edit="s{{N}}-4">The turning point</li>
+          <li class="bb-chip" data-edit="s{{N}}-5">What follows</li>
+        </ul>
+      </div>
+      <div class="bb-r w8">
+        <div class="bb-chart" id="s{{N}}-chart" role="img" aria-label="Describe the chart: what rises, what falls, where it turns."></div>
+      </div>
+    </div>
+    <footer class="bb-foot"><span class="bb-mark" data-edit="s{{N}}-6">Deck mark</span><span class="bb-pageno"></span></footer>
+  </div>
+  <aside class="notes" data-aura-notes>
+    <p>Read the axes first: what runs along the bottom, what runs up the side. Then read the chart as a shape.</p>
+    <p><strong>Walk the three chips</strong> in order and point at the place on the curve each one names. Stop on the marker:
+    that is the moment the slide is about.</p>
+    <p>Honesty: if the curve is marked illustrative, say so out loud: it shows the shape the literature describes, not our
+    measurements. If it is real data, name the source on the slide.</p>
+  </aside>
+</section>
+<script>
+BBChart.line('#s{{N}}-chart', {
+  label: 'Line chart',
+  x: { min: 0, max: 60, ticks: [0, 10, 20, 30, 40, 50, 60], title: 'time, min' },
+  y: { min: 20, max: 110, ticks: [40, 60, 80, 100], title: 'quantity, unit' },
+  series: [
+    { name: 'series one', color: '#E23B00', points: [[0, 35], [20, 55], [40, 72], [47, 78], [50, 84], [55, 80], [60, 86]] },
+    { name: 'series two', color: '#0061EF', points: [[0, 33], [20, 40], [40, 47], [47, 49], [50, 58], [55, 52], [60, 56]] },
+  ],
+  band: { from: 47, to: 60 },
+  event: { x: 47, y: 78, label: 'the turning point' },
+  illustrative: true,              // false + source: '...' once the values are real
+});
+</script>

@@ -1,0 +1,348 @@
+/* Lumi v0.5 calm theme: loaded last. Black is for text only. Primary actions and the selected item are a deeper
+   violet with white text, secondary actions soft lavender; both carry a faint fur-like grain, a soft fuzzy gradient
+   and a soft shadow, and the main calls to action a tiny doodle. Tokens first, then where they apply, app-wide. */
+:root{
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .6 -.22'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23g)'/%3E%3C/svg%3E");
+  --grain-dk:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .36 0 0 0 0 .25 0 0 0 0 .66 0 0 0 .45 -.17'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23g)'/%3E%3C/svg%3E");
+  --doodle:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='40' viewBox='0 0 90 40'%3E%3Cg fill='none' stroke='white' stroke-opacity='.34' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 31q6-8 12 0t12 0'/%3E%3Ccircle cx='50' cy='11' r='3.4'/%3E%3C/g%3E%3Cpath d='M76 5c.8 4.6 2.2 6 6.8 6.8-4.6.8-6 2.2-6.8 6.8-.8-4.6-2.2-6-6.8-6.8 4.6-.8 6-2.2 6.8-6.8z' fill='white' fill-opacity='.42'/%3E%3C/svg%3E");
+  --violet-grad:radial-gradient(130% 170% at 16% 0%,#7f63cf 0%,#5d40ab 52%,#4a3092 100%);
+  --lav-grad:radial-gradient(130% 170% at 16% 0%,#f4f0fd 0%,#e6ddf8 56%,#d9cdf3 100%);
+  --btn-primary:var(--grain) 0 0/150px 150px,var(--violet-grad);
+  --btn-cta:var(--grain) 0 0/150px 150px,var(--violet-grad);
+  --btn-soft:var(--grain-dk) 0 0/150px 150px,var(--lav-grad);
+  --sh-primary:0 12px 24px -14px rgba(74,48,146,.75),0 3px 8px -5px rgba(74,48,146,.4),inset 0 1px 0 rgba(255,255,255,.22);
+  --sh-soft:0 10px 20px -16px rgba(74,48,146,.55),inset 0 1px 0 rgba(255,255,255,.8);
+  --sh-card:0 18px 40px -26px rgba(74,48,146,.5),0 2px 6px -3px rgba(74,48,146,.18);
+}
+
+/* ---------------------------------------------------------------- primary: deep violet, white text */
+.begin,.btn-next,.btn-make,.hm-edit,.pl-build,.bd-main,.pl-ink,.fz-ink,.ed-ink,.pl-dq-send,.ch-send,.ed-pop-save,.ws-ink,.ld-fix,
+.ld-primary,.ld-u-go,.hm-acct-go{background:var(--btn-primary) !important;color:#fff !important;box-shadow:var(--sh-primary)}
+.begin,.btn-make,.pl-build,.bd-main{background:var(--btn-cta) !important}
+.begin:hover,.btn-next:hover,.btn-make:hover,.pl-build:hover,.bd-main:hover,.hm-edit:hover,.pl-ink:hover,.ld-primary:hover{filter:brightness(1.06)}
+.pl-ink .pl-big-i{background:rgba(255,255,255,.2);color:#fff}
+.pl-ink .pl-big-tag{background:rgba(255,255,255,.22);color:#fff}
+.bd-main.is-final{background:var(--btn-cta) !important}
+
+/* ---------------------------------------------------------------- secondary: soft lavender */
+.btn-back,.pl-big:not(.pl-ink),.pl-soft,.bd-rest,.fz-b:not(.fz-ink),.soft-pill,.ld-soft,.pl-addslide,.ed-act:not(.ed-ink),.ws-soft,
+.pl-fix-b:not(.pl-ink),.hm-b.hm-ico,.pl-add-b,.ld-update,.bd-more,.hm-acct{background:var(--btn-soft) !important;color:var(--ink);box-shadow:var(--sh-soft)}
+.btn-back:hover,.pl-big:not(.pl-ink):hover,.pl-soft:hover,.bd-rest:hover,.fz-b:not(.fz-ink):hover,.soft-pill:hover,.ld-soft:hover,.pl-addslide:hover,
+.ed-act:not(.ed-ink):hover,.pl-fix-b:not(.pl-ink):hover,.bd-more:hover{filter:brightness(1.03) saturate(1.1)}
+.pl-big:not(.pl-ink) .pl-big-i{background:#fff}
+
+/* ---------------------------------------------------------------- selected states: violet, white text */
+.pl-row.on,.card[aria-checked=true],.lk-opt.is-on,.pl-chip.on,.up-row.is-main,.ws-card.ws-done{background:var(--btn-primary) !important;color:#fff;box-shadow:var(--sh-primary)}
+.ws-user .ws-bub{background:var(--btn-primary);color:#fff}
+.pl-toast,.pl-shim-t{background:var(--btn-primary);color:#fff;box-shadow:var(--sh-primary)}
+.pl-toast.bad{background:var(--rose)}
+
+/* ---------------------------------------------------------------- the "make a new deck" card: violet, fuzzy, doodled */
+.hm-new{background:var(--btn-primary) !important;color:#fff;box-shadow:var(--sh-card),var(--sh-primary)}
+.hm-new-s{color:rgba(255,255,255,.8) !important}
+.hm-new-top{background:var(--btn-soft) !important}
+
+/* ---------------------------------------------------------------- panels that used to be black: soft and light */
+.pl-strip{background:var(--btn-soft) !important;color:var(--ink) !important;box-shadow:var(--sh-soft)}
+.pl-strip-t{background:rgba(255,255,255,.7) !important}
+.pl-strip-nav .pg{background:#fff !important;color:var(--ink) !important}
+.pl-dq.is-compact .pl-dq-opt{background:#fff !important;color:var(--ink) !important}
+.pl-dq.is-compact .pl-dq-opt.on{background:var(--btn-primary) !important;color:#fff !important}
+.pl-dq.is-compact .pl-dq-opt.on .pl-dq-tick{background:#fff !important;color:var(--accent) !important}
+.pl-dq.is-compact .pl-dq-free{background:#fff !important;color:var(--ink) !important}
+.pl-dq.is-compact .pl-dq-free::placeholder{color:var(--faint) !important}
+.pl-dq.is-compact .pl-dq-send{background:var(--btn-primary) !important;color:#fff !important}
+.pl-dq-opt.on .pl-dq-tick{color:var(--accent)}
+.pl-why{background:#fff !important;color:var(--ink) !important;box-shadow:var(--sh-card),0 0 0 2px var(--lav)}
+.pl-fix,.pl-addpop,.pl-badgepop{box-shadow:var(--sh-card),0 0 0 2px var(--lav) !important}
+.pl-card,.bd-up,.hm-card,.pl-dlg{box-shadow:var(--sh-card)}
+
+/* ---------------------------------------------------------------- loading: a bar with Lumi running on it */
+.ld-left{position:absolute;left:138px;top:110px;width:420px}
+.ld-badge{gap:9px}
+.ld-pulse{position:relative;width:8px;height:8px;border-radius:50%;background:var(--fur4)}
+.ld-pulse::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--fur4);animation:wsPulse 1.5s var(--ease) infinite}
+.ld-badge[data-state=ok] .ld-pulse,.ld-badge[data-state=ok] .ld-pulse::after{background:var(--accent);animation:none}
+.ld-badge[data-state=fail] .ld-pulse,.ld-badge[data-state=offline] .ld-pulse,.ld-badge[data-state=fail] .ld-pulse::after,.ld-badge[data-state=offline] .ld-pulse::after{background:var(--rose)}
+.ld-badge[data-state=signin] .ld-pulse,.ld-badge[data-state=free] .ld-pulse,.ld-badge[data-state=signin] .ld-pulse::after,.ld-badge[data-state=free] .ld-pulse::after{background:var(--orange)}
+.ld-head{min-height:100px}
+.ld-bar{--p:0;position:relative;margin-top:86px;width:400px;height:20px}
+.ld-track{position:absolute;inset:0;border-radius:20px;background:var(--btn-soft);box-shadow:inset 0 2px 5px rgba(74,48,146,.18),0 1px 0 #fff;overflow:hidden}
+.ld-fill{position:absolute;left:0;top:0;bottom:0;width:calc(var(--p) * 100%);min-width:20px;border-radius:inherit;
+  background:repeating-linear-gradient(115deg,rgba(255,255,255,.14) 0 10px,transparent 10px 20px) 0 0/40px 100%,var(--btn-primary);
+  transition:width .45s var(--ease);animation:ldStripes 1s linear infinite}
+.ld-bar.is-paused .ld-fill{animation:none}
+@keyframes ldStripes{to{background-position:40px 0,0 0,0 0}}
+.ld-runner{position:absolute;bottom:8px;left:calc(var(--p) * (100% - 62px));width:62px;height:62px;transition:left .45s var(--ease);
+  filter:drop-shadow(0 6px 6px rgba(74,48,146,.25))}
+.ld-runner svg{display:block;overflow:visible}
+.lumi-art .la-body,.lumi-art .la-foot{transform-box:fill-box;transform-origin:50% 100%}
+.ld-runner.is-running .la-body{animation:laBob .32s var(--ease-io) infinite alternate}
+.ld-runner.is-running .la-foot.l{animation:laStep .32s var(--ease-io) infinite alternate}
+.ld-runner.is-running .la-foot.r{animation:laStep .32s var(--ease-io) infinite alternate-reverse}
+.ld-runner:not(.is-running) .la-body{animation:laBreathe 2.6s var(--ease-io) infinite}
+@keyframes laBob{from{transform:translateY(0) rotate(-3deg)}to{transform:translateY(-5px) rotate(3deg)}}
+@keyframes laStep{from{transform:translate(-2px,0) rotate(-14deg)}to{transform:translate(2px,-3px) rotate(14deg)}}
+@keyframes laBreathe{50%{transform:scale(1.03,.97)}}
+.lumi-art .la-tear{animation:laTear 2.4s var(--ease-io) infinite}
+@keyframes laTear{0%,40%{transform:translateY(0);opacity:1}100%{transform:translateY(7px);opacity:0}}
+.ld-line{margin-top:20px;min-height:26px;font-size:18px;line-height:1.4}
+.ld-details-b{margin-top:8px;color:var(--mute)}
+.ld-list{list-style:none;margin-top:14px;width:400px;display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:22px;background:rgba(255,255,255,.72);
+  box-shadow:var(--sh-card);animation:wsIn .35s var(--ease) both}
+.ld-row{display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;column-gap:10px;min-height:38px}
+.ld-ico{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:#fff;background:var(--accent)}
+.ld-ico svg{width:13px;height:13px}
+.ld-row[data-state=fail] .ld-ico{background:var(--rose)}
+.ld-row[data-state=warn] .ld-ico{background:var(--orange)}
+.ld-t{display:flex;flex-direction:column;min-width:0}
+.ld-l{font-size:15px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ld-d{font-size:14px;line-height:1.3;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ld-right{position:absolute;left:1140px;top:110px;width:380px;display:flex;flex-direction:column;align-items:flex-start}
+.ld-card{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:24px 26px 24px;border-radius:30px;
+  background:var(--grain-dk) 0 0/150px 150px,linear-gradient(180deg,#fff,#faf8fe);box-shadow:var(--sh-card)}
+.ld-card.is-in{animation:plUp .45s var(--ease) both}
+.ld-face{display:block;margin:-6px 0 0 -6px}
+.ld-face svg{overflow:visible}
+.ld-c-t{font-family:var(--head);font-weight:900;font-size:25px;line-height:1.12;letter-spacing:-.015em}
+.ld-c-x{font-size:16px;line-height:1.5;color:rgba(8,9,9,.74)}
+.ld-c-b{margin-top:8px;display:flex;flex-wrap:wrap;gap:10px}
+.ld-primary,.ld-soft{display:inline-flex;align-items:center;height:50px;padding:0 22px;border-radius:100px;font-size:17px;white-space:nowrap;
+  transition:transform .25s var(--ease),filter .2s,opacity .2s}
+.ld-primary:active,.ld-soft:active{transform:scale(.96)}
+.ld-primary:disabled,.ld-soft:disabled{opacity:.6}
+.ld-skip{margin-top:4px;color:var(--mute)}
+.ld-update{margin-top:14px;display:inline-flex;align-items:center;gap:10px;height:42px;padding:0 6px 0 14px;border-radius:100px;font-size:14px;
+  animation:wsIn .5s var(--ease) both}
+.ld-uspark{flex:none;width:9px;height:9px;border-radius:50%;background:var(--orange);animation:wsBlink 1.6s var(--ease-io) infinite}
+.ld-u-go{height:30px;padding:0 12px;border-radius:100px;line-height:30px}
+
+/* ---------------------------------------------------------------- home: account pill + tappable update note */
+.hm-acct{margin-top:18px;display:inline-flex;align-items:center;gap:10px;height:40px;padding:0 5px 0 8px;border-radius:100px;font-size:14px;max-width:344px}
+.hm-acct-dot{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#fff;color:var(--accent)}
+.hm-acct-dot svg{width:16px;height:16px}
+.hm-acct-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hm-acct-t b{font-weight:400;color:var(--accent)}
+.hm-acct-go{flex:none;height:30px;padding:0 12px;border-radius:100px;font-size:14px;white-space:nowrap}
+.hm-acct-go:disabled{opacity:.6}
+.hm-acct.is-free .hm-acct-t b{color:var(--rose)}
+button.hm-upd{cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:var(--fur4);text-underline-offset:3px}
+button.hm-upd:hover{color:var(--ink)}
+
+/* ---------------------------------------------------------------- plan card: one picture line, choices on demand */
+.pl-ed:not(.pic-open){grid-template-columns:minmax(0,680px)}
+.pl-picline{align-self:flex-start;margin-top:22px;display:inline-flex;align-items:center;gap:10px;height:52px;padding:0 18px 0 8px;border-radius:100px;
+  background:var(--btn-soft);box-shadow:var(--sh-soft);font-size:20px;transition:transform .25s var(--ease),filter .2s}
+.pl-picline:hover{transform:translateY(-1px);filter:saturate(1.15)}
+.pl-picline b{font-weight:400;color:var(--accent)}
+.pl-picline-i{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#fff;color:var(--accent)}
+.pl-picline-i svg{width:22px;height:22px}
+.pl-picline-l{color:var(--mute)}
+.pl-picline-e{display:inline-flex;margin-left:4px;opacity:.7}.pl-picline-e svg{width:20px;height:20px}
+.pl-picline.on{background:var(--btn-primary);color:#fff;box-shadow:var(--sh-primary)}
+.pl-picline.on b,.pl-picline.on .pl-picline-l{color:#fff}
+.pl-pic{animation:wsIn .3s var(--ease) both}
+.pl-pichead{display:flex;align-items:center;gap:10px}
+.pl-pichead .pl-lab{margin:0}
+.pl-picdone{margin-left:auto;height:38px;padding:0 16px;border-radius:100px;background:var(--btn-soft);box-shadow:var(--sh-soft);font-size:17px}
+.pl-pichint{margin-top:12px;font-size:17px;color:var(--mute)}
+.pl-pic .pl-chips{margin-top:8px}
+.pl-list{transition:opacity .2s}
+.pl-listcol.is-flip-up .pl-list{box-shadow:inset 0 46px 26px -30px rgba(91,63,168,.28);border-radius:18px}
+.pl-listcol.is-flip-down .pl-list{box-shadow:inset 0 -46px 26px -30px rgba(91,63,168,.28);border-radius:18px}
+
+/* ---------------------------------------------------------------- build page: fewer things at once */
+#build .ed-stats{display:none}
+#build .ed-chat.is-quiet{top:792px;height:74px}
+#build .ed-chat.is-quiet .ws-head,#build .ed-chat.is-quiet .ws-body,#build .ed-chat.is-quiet .ws-hints,#build .ed-chat.is-quiet .ws-clip,
+#build .ed-chat.is-quiet .ws-jump{display:none !important}
+#build .ed-chat.is-quiet .ws{justify-content:center;box-shadow:var(--sh-card)}
+#build .ed-chat.is-quiet::before{content:'ask claude to change anything';position:absolute;left:8px;top:-30px;font-size:16px;color:var(--mute)}
+.bd-more{flex:none;display:grid;place-items:center;width:56px;height:56px;border-radius:50%;transition:transform .25s var(--ease)}
+.bd-more svg{width:24px;height:24px}
+.bd-more.on{background:var(--btn-primary) !important;color:#fff}
+.bd-rest{animation:wsIn .3s var(--ease) both}
+.bd-up-more{height:40px;margin:2px 0 0 4px;align-self:flex-start;padding:0 16px;border-radius:100px;background:var(--btn-soft);box-shadow:var(--sh-soft);font-size:17px}
+.bd-alldlg .bd-all{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bd-alldlg .bd-up-row{background:var(--bg)}
+
+/* ---------------------------------------------------------------- tiny doodles on the main calls to action */
+.begin,.btn-make{position:relative}
+.begin::after,.btn-make::after,.pl-build::after,.bd-main::after,.hm-new::after{content:'';position:absolute;right:-12px;top:-16px;width:44px;height:38px;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 38'%3E%3Cpath d='M26 3c1 6 2.8 7.8 8.8 8.8-6 1-7.8 2.8-8.8 8.8-1-6-2.8-7.8-8.8-8.8 6-1 7.8-2.8 8.8-8.8z' fill='%237f63cf'/%3E%3Ccircle cx='38.5' cy='25' r='3' fill='%23f2a65a'/%3E%3Ccircle cx='10' cy='8' r='2.4' fill='none' stroke='%23d993b4' stroke-width='1.8'/%3E%3C/svg%3E") center/contain no-repeat;
+  animation:ctaTwinkle 3.2s var(--ease-io) infinite;transform-origin:60% 30%}
+.hm-new::after{right:14px;top:12px;filter:brightness(1.9) saturate(.6)}
+@keyframes ctaTwinkle{0%,100%{transform:scale(1) rotate(0)}50%{transform:scale(1.12) rotate(8deg)}}
+.pl-build{top:88px}
+/* the explanation note: in the card header, never on top of a control */
+.pl-note{position:static !important;flex:0 1 430px;min-width:0;width:auto !important;padding:6px 14px !important;border-radius:14px !important;font-size:15px !important;
+  line-height:1.3 !important;background:var(--btn-soft) !important;box-shadow:var(--sh-soft) !important;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pl-pic .pl-note{margin-top:10px}
+.bd-main{position:relative}
+.pl-cpos,.pl-meter{white-space:nowrap}
+.pl-chead:has(.pl-note:not([hidden])) .pl-meter-t,.pl-chead:has(.pl-note:not([hidden])) .pl-cst{display:none}
+.pl-dlg.bd-card:not(:has(.pic-open)){width:780px}
+
+/* chat panel: suggestion chips and choice options wrap above the input; the panel scrolls inside, never under the box */
+.ws-hints{max-height:172px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;align-items:flex-start}
+.ws-hints .hint-chip,.ws-hl-c .hint-chip{height:auto;min-height:30px;padding:4px 12px 4px 4px;white-space:normal;text-align:left;line-height:1.25;max-width:100%}
+.ws-hints .hint-t,.ws-hl-c .hint-t{overflow:visible;text-overflow:clip;min-width:0}
+.ws-hints-t{align-self:center}
+.ws-box{position:relative;z-index:1}
+.ws-body{min-height:90px}
+
+/* stepped questions in the build window: one question at a time, numbered tabs on top */
+.ch-q[hidden],.ch-nav[hidden]{display:none}
+.ch-steps{padding:2px 4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ch-step{flex:none;box-sizing:border-box;width:30px;min-width:30px;height:30px;padding:0;margin:0;display:grid;place-items:center;line-height:1;border-radius:50%;background:var(--white);font-size:14px;font-weight:700;color:var(--ink,#2a2350);transition:transform .25s var(--ease)}
+.ch-step.done{background:var(--lav);color:var(--accent)}
+.ch-step.cur{background:var(--accent);color:#fff;transform:scale(1.08)}
+.ch-stepof{margin-left:auto;font-size:14px;color:var(--faint)}
+.ch-nav{flex:none;height:40px;padding:0 16px;border-radius:100px;background:var(--lav);color:var(--accent);font-size:15px;font-weight:700;white-space:nowrap}
+.ch-nav:disabled{opacity:.4}
+
+/* ================================================================ build page v0.5.2: questions docked under the slide, a game while claude works */
+/* normal build layout: a little tighter, so the space under the build buttons can hold the activity panel */
+#build .bd-bar{top:640px}
+#build .bd-say{top:712px}
+#build .ed-toast{top:612px}
+.bd-playhost{position:absolute;left:316px;top:746px;width:810px;height:138px;pointer-events:none}
+.bd-playhost > *{pointer-events:auto}
+.bd-playhost:empty{display:none}
+.bd-qdock{position:absolute;left:316px;top:540px;width:810px;height:344px;pointer-events:none;z-index:3}
+.bd-qdock:empty{display:none}
+.bd-qdock > *{pointer-events:auto}
+.ws-hints[hidden]{display:none !important}
+.ws.no-ideas .ws-hintline{display:none}
+
+/* a question is open (is-asking): the preview shrinks, the panel docks beneath it, nothing overlaps */
+#build.is-asking .ed-preview{left:377px;top:100px;width:688px;height:387px}
+#build.is-asking .ed-nav{top:494px}
+#build.is-asking .bd-bar,#build.is-asking .bd-say,#build.is-asking .ed-toast,#build.is-asking .bd-playhost{display:none}
+/* the panel folded away: the layout is the normal one and only a slim bar stays */
+.bd-qdock:has(.ws-pop.is-folded){top:746px;height:56px}
+
+.ws-pop{position:relative;height:100%;display:flex;flex-direction:column;border-radius:24px;background:var(--pill);
+  box-shadow:0 22px 50px -22px rgba(74,48,146,.5),0 0 0 2px var(--lav);animation:wsPopDock .4s var(--ease) both}
+@keyframes wsPopDock{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.ws-pop-bar{position:absolute;top:10px;right:12px;z-index:3;display:flex;align-items:center;gap:10px}
+.ws-pop-ava,.ws-pop-t{display:none}
+.ws-pop-fold{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px 0 14px;border-radius:100px;background:var(--btn-soft);box-shadow:var(--sh-soft);font-size:14px;color:var(--ink)}
+.ws-pop-fold i{width:8px;height:8px;border-right:2.5px solid currentColor;border-bottom:2.5px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform .25s var(--ease)}
+.ws-pop.is-folded .ws-pop-fold i{transform:translateY(2px) rotate(-135deg)}
+.ws-pop.is-folded{height:56px;flex-direction:row;align-items:center}
+.ws-pop.is-folded .ws-pop-bar{position:static;width:100%;padding:0 12px 0 16px}
+.ws-pop.is-folded .ws-pop-ava{display:block;width:30px;height:30px}
+.ws-pop.is-folded .ws-pop-ava svg{width:100%;height:100%;display:block}
+.ws-pop.is-folded .ws-pop-t{display:block;flex:1;font-family:var(--head);font-weight:900;font-size:17px}
+.ws-pop.is-folded .ws-pop-main{display:none}
+.ws-pop-main{flex:1;min-height:0;display:grid;grid-template-columns:268px minmax(0,1fr);gap:14px;padding:14px}
+.ws-pop-ctx{min-height:0;overflow-y:auto;scrollbar-width:thin;border-radius:18px;background:var(--bg);padding:12px 14px}
+.ws-pop-main:has(> .ws-pop-ctx[hidden]){grid-template-columns:minmax(0,1fr)}
+.ws-pop-body{min-height:0;overflow-y:auto;scrollbar-width:thin;overscroll-behavior:contain;padding:2px 4px 0 0}
+.ws-pop .ch-card{background:transparent;padding:0;border-radius:0;gap:12px;min-height:100%}
+.ws-pop .ch-steps{padding:0 110px 0 0}
+.ws-pop .ch-stepof{margin-left:0}
+.ws-pop .ch-qt{font-size:19px;line-height:1.3;font-family:var(--head);font-weight:900}
+.ws-pop .ch-tag{font-family:var(--sans);font-weight:400}
+.ws-pop .ch-opts{gap:8px}
+.ws-pop .ch-opt{height:auto;min-height:38px;padding:7px 16px;white-space:normal;text-align:left;font-size:16px}
+.ws-pop .ch-foot{margin-top:auto;position:sticky;bottom:0;padding:10px 0 2px;background:var(--pill);flex-wrap:wrap}
+.ws-pop .ch-free{height:42px;min-width:170px;font-size:15px;background:var(--bg)}
+.ws-pop .ch-send{height:42px;padding:0 26px;font-size:17px;background:var(--btn-primary);color:#fff}
+.ws-pop .ch-nav{height:42px}
+.ch-send[hidden]{display:none}
+
+/* the slide a question is about: its number and plan, so nobody has to remember it */
+.qx{display:flex;flex-direction:column;gap:7px}
+.qx-top{display:flex;align-items:flex-start;gap:9px}
+.qx-n{flex:none;display:grid;place-items:center;min-width:30px;height:30px;padding:0 6px;border-radius:50%;background:var(--accent);color:#fff;font-size:16px;font-weight:700}
+.qx-title{font-family:var(--head);font-weight:900;font-size:17px;line-height:1.2;padding-top:3px}
+.qx-thumb{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;background:#fff;box-shadow:0 0 0 2px var(--lav)}
+.qx-point{font-size:15px;line-height:1.35}
+.qx-b{list-style:none;display:flex;flex-direction:column;gap:3px}
+.qx-b li{position:relative;padding-left:14px;font-size:14px;line-height:1.3;color:var(--mute)}
+.qx-b li::before{content:'';position:absolute;left:2px;top:.55em;width:6px;height:6px;border-radius:50%;background:var(--lav-deep)}
+.qx-vis,.qx-src{display:flex;align-items:flex-start;gap:7px;font-size:14px;line-height:1.3}
+.qx-vi{flex:none;display:inline-flex;color:var(--accent)}
+.qx-vi svg{width:18px;height:18px}
+.qx-ph{font-size:14px;line-height:1.3;color:var(--mute);font-style:italic}
+.qx-src{color:var(--mute)}
+
+/* something to do while claude works (lumi-play.js) next to the real current step */
+.pl-play{display:flex;gap:14px;height:100%}
+.pl-arena{position:relative;flex:none;width:560px;height:138px;border-radius:24px;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:none;
+  background:radial-gradient(120% 140% at 20% 0%,#f6f2fd 0%,#e6ddf8 60%,#d9cdf3 100%);box-shadow:var(--sh-soft)}
+.pl-arena[hidden]{display:none}
+.pl-cv{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+.pl-lumi{position:absolute;left:0;bottom:3px;width:52px;height:52px;pointer-events:none;will-change:transform;filter:drop-shadow(0 5px 5px rgba(74,48,146,.25))}
+.pl-lumi svg{display:block;overflow:visible}
+.pl-lumi .lumi-art.is-running .la-body{animation:laBob .32s var(--ease-io) infinite alternate}
+.pl-lumi .lumi-art.is-running .la-foot.l{animation:laStep .32s var(--ease-io) infinite alternate}
+.pl-lumi .lumi-art.is-running .la-foot.r{animation:laStep .32s var(--ease-io) infinite alternate-reverse}
+.pl-hud{position:absolute;left:14px;top:10px;display:flex;align-items:baseline;gap:8px;font-size:14px;color:var(--mute);pointer-events:none}
+.pl-score{font-family:var(--head);font-weight:900;font-size:22px;color:var(--accent);min-width:22px}
+.pl-best{font-size:14px;color:var(--faint)}
+.pl-hint{position:absolute;left:0;right:0;top:46px;text-align:center;font-size:16px;color:var(--mute);pointer-events:none;transition:opacity .25s}
+.pl-play.is-playing .pl-hint{opacity:0}
+.pl-hide{position:absolute;right:10px;top:8px;height:26px;padding:0 12px;border-radius:100px;background:rgba(255,255,255,.7);font-size:14px;color:var(--mute);transition:background .2s}
+.pl-hide:hover{background:#fff}
+.pl-step{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:14px 18px;border-radius:24px;background:var(--pill);box-shadow:var(--sh-card)}
+.pl-play.is-nogame .pl-step{flex-direction:row;align-items:center}
+.pl-step-i{display:inline-flex;gap:5px;align-self:flex-start}
+.pl-step-i i{width:9px;height:9px;border-radius:50%;background:var(--orange);animation:wsBlink 1.1s var(--ease-io) infinite}
+.pl-step-i i:nth-child(2){animation-delay:.18s}.pl-step-i i:nth-child(3){animation-delay:.36s}
+.pl-step-t{min-width:0;flex:1}
+.pl-step-h{font-family:var(--head);font-weight:900;font-size:19px;line-height:1.2}
+.pl-step-s{margin-top:5px;font-size:16px;line-height:1.3;color:var(--mute);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.pl-show{flex:none;height:40px;padding:0 20px;border-radius:100px;background:var(--btn-soft);box-shadow:var(--sh-soft);font-size:15px;white-space:nowrap}
+.pl-show[hidden]{display:none}
+@media (prefers-reduced-motion:reduce){.pl-step-i i{animation:none}.ws-pop{animation:none}}
+#build.has-ask .ed-chat.is-quiet::before{content:'answer claude’s questions first'}
+.qx-nothumb{display:grid;place-items:center;width:100%;aspect-ratio:16/9;border-radius:10px;border:2px dashed var(--lav-deep);font-size:14px;color:var(--faint);text-align:center;padding:0 10px}
+.pl-badge-nav{align-self:flex-start;margin:-2px 0 2px}
+.pl-badge-nav .pg{background:var(--lav) !important;color:var(--ink) !important}
+.pl-dq-q{padding-right:36px}
+/* inline cards in the narrow chat column: the free box gets its own row above the buttons */
+.ws .ch-foot{flex-wrap:wrap;align-items:center}
+.ws .ch-free{flex:1 1 100%;order:-1}
+.ws .ch-foot .ch-nav,.ws .ch-foot .ch-send{flex:0 0 auto}
+.ws-pop .ch-free{flex:1 1 170px;order:0}
+
+/* ================================================================ batch D: zoom + scrolling, offline bar, a11y, library menu, undo */
+/* F-08: when the stage is bigger than the window (browser zoom, or a very small window) the page scrolls instead of clipping */
+html.scrolls{overflow:auto}
+html.scrolls body{overflow:visible;height:100%}
+/* F-14: text for screen readers only */
+.sr-only{position:absolute !important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* F-19: the one "can't reach lumi" bar every screen shares */
+#netbar{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:14px;padding:10px 12px 10px 20px;
+  border-radius:100px;background:var(--accent);color:#fff;font-size:17px;box-shadow:0 8px 28px rgba(74,48,146,.32)}
+#netbar .nb-dot{width:10px;height:10px;border-radius:50%;background:var(--orange);animation:nbPulse 1.2s ease-in-out infinite}
+@keyframes nbPulse{50%{opacity:.35;transform:scale(.8)}}
+#netbar button{height:34px;padding:0 16px;border-radius:100px;background:var(--lav);color:var(--ink);font-size:15px}
+#netbar button:disabled{opacity:.6}
+/* W-06 undo (plan page), W-02 library menu, rename, archived toggle, W-01 add-a-slide */
+.pl-undo{position:absolute;left:50%;bottom:78px;transform:translateX(-50%);z-index:31;height:44px;padding:0 22px;border-radius:100px;background:var(--lav);color:var(--ink);font-size:17px;
+  box-shadow:var(--sh-soft);animation:plUp .35s var(--ease) both}
+.pl-undo:hover{background:var(--lav-deep)}
+.hm-menu{position:absolute;right:10px;bottom:62px;z-index:5;display:flex;flex-direction:column;min-width:210px;padding:8px;border-radius:20px;background:var(--white);
+  box-shadow:0 12px 34px rgba(8,9,9,.18);animation:plUp .25s var(--ease) both}
+.hm-mi{height:42px;padding:0 14px;border-radius:12px;text-align:left;font-size:16px}
+.hm-mi:hover,.hm-mi:focus-visible{background:var(--lav)}
+.hm-mi.is-danger{color:var(--rose)}
+.hm-mi.is-danger.is-armed{background:var(--rose);color:#fff}
+.hm-rename{width:100%;height:32px;padding:0 10px;border-radius:10px;border:2px solid var(--fur4);background:var(--white);font-size:18px}
+.hm-undo,.hm-arch,.hm-retry,.hm-pointer{height:34px;padding:0 14px;border-radius:100px;background:var(--lav);color:var(--ink);font-size:14px;white-space:nowrap}
+.hm-undo:hover,.hm-arch:hover,.hm-retry:hover{background:var(--lav-deep)}
+.hm-retry{margin-top:6px;height:42px;font-size:16px}
+.hm-pointer{margin-left:auto;margin-right:12px;height:30px;background:transparent;color:var(--mute);text-decoration:underline;padding:0 2px}
+.hm-pointer:not([hidden])+.hm-pager{margin-left:0}
+.hm-more svg{width:20px;height:20px}
+.bd-up-add{margin-left:auto;flex:none;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--btn-soft);box-shadow:var(--sh-soft)}
+.bd-up-add svg{width:18px;height:18px}
+.bd-up-top .bd-up-n{margin-left:0}
+.pl-big.is-danger .pl-big-h{color:var(--rose)}
+/* a keyboard user always sees where they are, also on the pieces that hide the default ring */
+.pl-row:focus-visible,.ed-th:focus-visible,.pl-chip:focus-visible,.pl-dq-opt:focus-visible,.ch-opt:focus-visible,.ch-step:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.hm-new-s{text-wrap:balance}

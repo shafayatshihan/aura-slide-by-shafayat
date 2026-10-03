@@ -92,7 +92,7 @@ class H(BaseHTTPRequestHandler):
         if path == '/api/remove': return self.json({'ok': True})
         if path == '/api/claude/start' or path == '/api/claude/reply':
             threading.Thread(target=fake_run, args=(path.endswith('start'),), daemon=True).start(); return self.json({'ok': True})
-        if path in ('/api/claude/stop', '/api/claude/login', '/api/open-files', '/api/open-slides', '/api/open-vscode'): return self.json({'ok': True})
+        if path in ('/api/claude/stop', '/api/claude/login', '/api/open-files', '/api/open-slides'): return self.json({'ok': True})
         return self.json({'error': 'not found'}, 404)
 
 if __name__ == '__main__':

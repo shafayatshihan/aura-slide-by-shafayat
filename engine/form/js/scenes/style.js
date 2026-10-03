@@ -347,8 +347,13 @@ function drawOverlay(g, m) {
 function gearSpinSign(i) { let s = 1, j = i; while (GEARS[j].parent !== undefined) { s = -s; j = GEARS[j].parent; } return s; }
 
 // ---------------------------------------------------------------- 3D renderer
+// createRenderer() allocates a WebGL context; if building the scene throws, release it here (nothing else can).
 function create3D(THREE, root, m, onEvict) {
   const gl = createRenderer(THREE, root, { maxPixels: 1.6e6, onEvict });
+  try { return build3D(THREE, root, m, onEvict, gl); } catch (e) { try { gl.dispose(); } catch (e2) { /* ignore */ } throw e; }
+}
+
+function build3D(THREE, root, m, onEvict, gl) {
   gl.canvas.style.zIndex = '1';
   const kit = createKit(THREE);
   const scene = new THREE.Scene();

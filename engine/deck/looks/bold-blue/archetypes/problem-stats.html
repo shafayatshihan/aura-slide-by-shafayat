@@ -1,0 +1,45 @@
+<!-- archetype: problem-stats | the problem in three numbers + a 3D object that shows the pain | main visual: 3D | companions: <=3 stats, one close line -->
+<section class="slide bb-stage-bg" data-kind="content" data-minutes="1.5" data-title="The problem">
+  <div class="safe">
+    <div class="bb-main">
+      <div class="bb-l w5">
+        <p class="kicker" data-edit="s{{N}}-1">01 · The problem</p>
+        <h2 class="headline" data-edit="s{{N}}-2">Short claim that <span class="em">names the pain</span></h2>
+        <ul class="bb-stats">
+          <li><div class="bb-stat" data-edit="s{{N}}-3"><span data-bb-count>120</span><small>unit</small></div><p data-edit="s{{N}}-4">what the number means, in a few words</p></li>
+          <li class="copper"><div class="bb-stat" data-edit="s{{N}}-5"><span data-bb-count>40</span>&nbsp;%</div><div class="bb-bar" style="--v:40%"><i></i></div><p data-edit="s{{N}}-6">a share, with its bar</p></li>
+          <li class="hot"><div class="bb-stat md" data-edit="s{{N}}-7">A plain-word limit</div><p data-edit="s{{N}}-8">why it gets worse</p></li>
+        </ul>
+        <p class="close-line" data-edit="s{{N}}-9">We need something that <b>does the one thing</b>.</p>
+      </div>
+      <div class="bb-r w7">
+        <div class="bb-stage"><div class="aura-3d bb-3d" data-scene="s{{N}}-scene" data-period="16" role="img" aria-label="Describe the 3D picture in one sentence."></div></div>
+      </div>
+    </div>
+    <footer class="bb-foot"><span class="bb-mark" data-edit="s{{N}}-10">Deck mark</span><span class="bb-pageno"></span></footer>
+  </div>
+  <aside class="notes" data-aura-notes>
+    <p>Start with the object on the right: say what it is and what is going wrong with it, before any number.</p>
+    <p>Walk the three numbers top to bottom and give each one its source out loud: who measured it, and when. If asked
+    where a number comes from, name the paper or report; never round it up to sound bigger.</p>
+    <p>Land on the last line: this is the gap the rest of the talk fills.</p>
+  </aside>
+</section>
+<script>
+Aura.scene('s{{N}}-scene', (ctx) => {
+  const { THREE } = ctx, P = ctx.period;
+  const S = BB3D.studio(ctx, { target: [0, 1.2, 0], distance: 10, azimuth: -30, elevation: 16, post: { bloom: true } });
+  const M = BB3D.materials(THREE);
+  const base = BB3D.roundedBox(THREE, 3.2, 0.24, 2.4, 0.06, M.plastic); base.position.y = 0.12;
+  const part = BB3D.roundedBox(THREE, 1.2, 0.3, 1.2, 0.05, M.black.clone()); part.position.y = 0.39;
+  const hot = BB3D.shaders.heatGlow(THREE, part.material, { axis: 'y', from: -0.15, to: 0.15, intensity: 6 });
+  const top = BB3D.roundedBox(THREE, 2.2, 0.5, 2.2, 0.05, M.copper); top.position.y = 1.6;
+  S.add(base, part, top);
+  return S.api({ update(t) {
+    const w = BBTime.phase(t, P);                     // whole harmonics of the period only: the loop is seamless
+    S.orbit(t);
+    hot.uHeat.value = 0.55 + 0.45 * Math.sin(w);
+    top.position.y = 1.6 + 0.08 * Math.sin(2 * w);
+  } });
+}, { period: 16 });
+</script>

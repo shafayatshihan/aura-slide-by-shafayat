@@ -1,13 +1,24 @@
-# On every push to main: build Lumi.exe (the installer + launcher people download) and Lumi-Setup.zip (the
-# app files the exe downloads), and put both on the release named after the version in setup/aura.config.json.
-# Same version -> the files on that release are replaced; new version -> a new release is made.
-# The download links (releases/latest/download/Lumi-Setup.zip and .../Lumi.exe) therefore always give the
-# newest files. The exe is built on Windows with the C# compiler that ships with the .NET Framework (no extra tools).
+# RELEASES ARE DELIBERATE. This workflow never runs on a plain push to main.
+# It runs only when (a) you push a tag named v<version> (e.g. v0.5.0), or (b) you start it by hand
+# (Actions -> Build release -> Run workflow).
+# Safety guards, in the "Guard" step below:
+#   1. The tag must equal the version in setup/aura.config.json (v0.5.0 <-> "0.5.0").
+#   2. A version ending in "-dev" (or any pre-release suffix) can never be published.
+#   3. If a release for that version ALREADY EXISTS the run fails - it will not overwrite published binaries.
+#      The only way past it is a manual run with the "overwrite" box ticked (for repairing a broken upload).
+# To ship: bump "version" in setup/aura.config.json (drop "-dev"), commit, then `git tag v<version> && git push origin v<version>`.
+# Builds Lumi.exe (installer + launcher) and Lumi-Setup.zip (the app files the exe downloads), and attaches both
+# to the release. The download links (releases/latest/download/...) then give the newest files.
 name: Build release
 on:
   push:
-    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      overwrite:
+        description: 'Replace the files of an existing release of this version (repair only)'
+        type: boolean
+        default: false
 permissions:
   contents: write
 jobs:
@@ -21,6 +32,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Guard - refuse an unbumped, dev or already-published version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OVERWRITE: ${{ inputs.overwrite }}
+        run: |
+          VERSION=$(python -c "import json;print(json.load(open('setup/aura.config.json'))['version'])")
+          TAG="v$VERSION"
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::version '$VERSION' in setup/aura.config.json is not a plain X.Y.Z (a -dev/pre-release version is never published)"; exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "$TAG" ]; then
+            echo "::error::pushed tag $GITHUB_REF_NAME does not match setup/aura.config.json version ($TAG)"; exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1 && [ "$OVERWRITE" != "true" ]; then
+            echo "::error::release $TAG already exists. Bump the version in setup/aura.config.json, or run manually with overwrite ticked."; exit 1
+          fi
       - name: Build Lumi.exe
         run: python tools/build_exe.py
       - name: Build the zip
@@ -34,6 +61,7 @@ jobs:
           # v0.3.x installs update by fetching Aura-Slide-Setup.zip; keep serving it under that name too.
           cp release/Lumi-Setup.zip release/Aura-Slide-Setup.zip
           if gh release view "$TAG" >/dev/null 2>&1; then
+            # reachable only via a manual run with overwrite ticked (the Guard step stops everything else)
             gh release upload "$TAG" release/Lumi-Setup.zip release/Aura-Slide-Setup.zip release/Lumi.exe --clobber
             echo "Updated the files on $TAG"
           else
