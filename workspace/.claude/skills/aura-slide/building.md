@@ -3,10 +3,15 @@
 After planning (`planning.md`), the person builds the deck slide by slide and checks each one before the next.
 **Every build step is self-contained.** Its message carries this slide's plan entry, the list of slides already built, the look
 and where the already-extracted source text is (`.aura/temp/text/`). So: do not open `plan.json` or run `extract_text.py` again,
-do not re-read the brief or the original files; read only the part of an extracted text you need for this slide. Once a
-conversation has grown large the app starts a fresh one for the next slide (the message then begins `[context-handoff]`, or
-`[context-recovery]` when the earlier conversation was lost): everything you need is then in the message and on disk. Read
-the deck file once to match the style of the slides already built, and nothing else about them.
+do not re-read the brief or the original files; read only the part of an extracted text you need for this slide.
+**Every slide has its own conversation.** A slide's first message begins `[slide-conversation n=<n> id=<id>]` and hands you
+the plan in short, the text now on the built slides and how they were built: that conversation is about slide n **only**, now
+and for every later change to it. Other slides have their own conversations and the whole deck has one more, so leave other
+slides alone unless the message asks for them (then say which you changed). A note starting `Since you last worked on this
+slide:` tells you about a whole-deck change made elsewhere: look at the slide as it is now before you touch it. If the slide's
+conversation grew too large or was lost, the message begins `[context-handoff]` or `[context-recovery]`: everything you need
+is then in the message and on disk. Read the deck file once to match the style of the slides already built, and nothing else
+about them.
 
 A build step starts with `[build-slide id=<id> n=<n> of=<total>]`. Messages also carry a `[deck-folder .aura/decks/<id>]`
 line: that is where this deck's files live and where the deck is packed (`CLAUDE.md`, "Where you write"; in a build step Lumi packs).

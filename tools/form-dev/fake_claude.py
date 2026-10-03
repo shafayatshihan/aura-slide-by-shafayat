@@ -12,8 +12,12 @@ Trigger words (in the message, or for the first run also in the brief's notes):
   rate-limit      hits the usage limit
   usage-windows   the rate_limit_event carries unifiedWindows.five_hour (instead of a top-level utilization)
   crash           dies without a result line
+  (session ids) containing dead-beef: --resume fails like the real CLI (stderr + result with errors); dead-quiet: exits 1 silently;
+  fail-fresh      (in the message) a NON-resumed run exits 1 with an error on stderr
 Every run first says "[fake-argv] <json list of its arguments>" so tests can check the flags (--model, --resume ...),
-and a resumed run also says "[fake-heard] <the message>" (to check the [slide N] prefix).
+and a resumed run also says "[fake-heard] <the message>" (to check the [slide N] prefix). A slide's own fresh conversation
+("[slide-conversation ..." first line) says "[fake-context] <its context>" and "[fake-heard] <the message after it>", and
+behaves like a reply (it never starts a new deck).
 A finished deck ends with 3 [[aura:hint slide=N text="..."]] lines. The deck is written both as a build source
 (.aura/temp/build/<slug>/index.html) and as the packed file, with data-edit ids on every text; slide 2's title
 (data-edit="s2-t1") shrinks to fit its box, so a very long text there breaks the 26 px rule.
@@ -51,6 +55,11 @@ if args[:2] == ['auth', 'logout']:
     print('Successfully logged out.'); sys.exit(0)
 
 message = sys.stdin.read()
+# v0.5.2: a slide's own conversation opens with a self-contained context ([slide-conversation n= id=] ... then a blank line, then the
+# real message). The triggers below look at the real message only (the context lists every slide's title).
+SC = '[slide-conversation' in message.split('\n', 1)[0]
+FULL = message
+CTX_PART, message = message.split('\n\n', 1) if SC and '\n\n' in message else ('', message)
 if '[lumi-help ' in message:            # the loading screen's headless helper: fix or explain one failing check
     if os.environ.get('AURA_FAKE_HELP_FAIL') == '1': sys.exit(1)
     if '[lumi-help explain]' in message:
@@ -68,7 +77,7 @@ try:
 except Exception:
     pass
 notes = str((brief.get('extra') or {}).get('notes') or '')
-trigger = lambda w: w in message or (not resume and w in notes)
+trigger = lambda w: w in message or (not resume and not SC and w in notes)
 n_tool = [0]
 CTX = [0]        # simulated context size of this conversation (tokens), reported like the real stream's message.usage
 
@@ -94,17 +103,26 @@ def result(text, error=False, sub='success'):
          'result': text, 'session_id': session, 'total_cost_usd': 0})
 
 
+if resume and 'dead-beef' in resume:       # a conversation Claude Code no longer has: exactly what the real CLI does (checked on this PC)
+    print('No conversation found with session ID: ' + resume, file=sys.stderr, flush=True)
+    print(json.dumps({'type': 'result', 'subtype': 'error_during_execution', 'duration_ms': 0, 'is_error': True, 'num_turns': 0,
+                      'session_id': resume, 'total_cost_usd': 0, 'errors': ['No conversation found with session ID: ' + resume]}), flush=True)
+    sys.exit(1)
+if resume and 'dead-quiet' in resume:      # the generic case: a resumed run dies at once and says nothing at all
+    sys.exit(1)
+if 'fail-fresh' in message and not resume:  # the recovery run fails as well (must stop, never loop)
+    print('Error: the fresh conversation could not start (fake)', file=sys.stderr, flush=True)
+    sys.exit(1)
 out('Ignoring 15 permissions.allow entries from .claude/settings.json: this folder has not been trusted yet (fake)')
 out({'type': 'system', 'subtype': 'hook_started', 'hook_name': 'SessionStart:startup', 'session_id': session})
 out({'type': 'system', 'subtype': 'init', 'session_id': session, 'cwd': str(cwd), 'model': 'fake-claude',
      'tools': ['Read', 'Write', 'Edit', 'Bash'], 'permissionMode': 'acceptEdits'})
 defang = lambda t: t.replace('[[aura:', '[[ aura:')      # an echo of the prompt must not look like markers Claude wrote
 say('[fake-argv] ' + defang(json.dumps(args, ensure_ascii=False)))
-if resume: say('[fake-heard] ' + defang(message[:300]))
+if SC: say('[fake-context] ' + defang(CTX_PART[:240]) + f' ... ({len(CTX_PART)} chars; digest={"The plan in short:" in CTX_PART}; '
+                 f'notes={"How the slides already built" in CTX_PART}; since={"Since you last worked" in message})')
+if resume or SC: say('[fake-heard] ' + defang(message[:300]))
 
-if resume and 'dead-beef' in resume:       # a conversation Claude Code no longer has: the CLI says so on stderr and fails
-    print('No conversation found with session ID: ' + resume, file=sys.stderr, flush=True)
-    sys.exit(1)
 if 'auth-fail' in message:
     result('Invalid API key · Please run /login', error=True)
     sys.exit(1)
@@ -140,13 +158,13 @@ def save_memo():
 if resume and sessions.get(session): title = sessions[session]
 else:
     mp = re.search(r'(\.aura/decks/[A-Za-z0-9_-]+)/plan\.json', message) or re.search(r'\[deck-folder (\.aura/decks/[A-Za-z0-9_-]+)\]', message)
-    if mp and '[build-slide' in message:           # a fresh conversation handed a deck (recovery / hand-off): the plan's title
+    if mp and ('[build-slide' in message or SC):           # a fresh conversation handed a deck (recovery / hand-off): the plan's title
         try: title = str(json.loads((cwd / mp.group(1) / 'plan.json').read_text(encoding='utf-8')).get('title') or title)
         except Exception: pass
     sessions[session] = title
     save_memo()
 # simulated context (AURA_FAKE_CTX_BASE: a new conversation starts with the skills + plan read; _SLIDE: what one built slide adds)
-CTX[0] = (sessions.get(session + ':ctx', 0) if resume else int(os.environ.get('AURA_FAKE_CTX_BASE', '60000'))) + len(message) // 4
+CTX[0] = (sessions.get(session + ':ctx', 0) if resume else int(os.environ.get('AURA_FAKE_CTX_BASE', '60000'))) + len(FULL) // 4
 
 
 def save_ctx(add):
@@ -300,7 +318,7 @@ if '[plan-edit]' in message and folder:
     say(t); result(t); sys.exit(0)
 
 # ---------------------------------------------------------------- v0.5 building one slide at a time
-mb_handoff = '[context-handoff]' in message or '[context-recovery]' in message
+mb_handoff = '[context-handoff]' in FULL or '[context-recovery]' in FULL or SC
 mb = re.search(r'\[build-slide id=([a-z0-9-]+) n=(\d+) of=(\d+)\]', message)
 pend_key = session + ':pending'
 if not mb and resume and folder and sessions.get(pend_key):         # an answer to a question asked during a build step
@@ -374,7 +392,7 @@ if mb and folder:
          f'[[aura:built slide="{sid}"]]\n[[aura:done path="{deck_rel}"]]')
     say(t); result(t); sys.exit(0)
 
-if resume:
+if resume or SC:
     say(f'Thanks, got it! Picking up where we left off (session {session[:8]}).')
 else:
     say('[[aura:stage=read]]\nHi! I’m reading your brief and your files first.')
@@ -401,7 +419,7 @@ write_deck([(title, 'A sample deck made by the fake Claude.', '', False, 'Welcom
             ('What we did', 'Method in three simple steps.', '', True, 'Walk through the model.'),
             ('Results', 'The numbers that matter.', '', False, 'Give the headline number.'),
             ('Thank you', 'Questions?', '', False, 'Invite questions.')])
-if resume:
+if resume or SC:
     tool('Edit', {'file_path': str(cwd / build_rel), 'old_string': 'a', 'new_string': 'b'}, 'The file has been updated.')
 say('[[aura:stage=check]]\nChecking every slide: all text is 26 px or larger.')
 tool('Bash', {'command': 'node .aura/engine/tools/deck_check.js .aura/temp/build/' + slug}, 'OK: 5 slides, 0 problems')

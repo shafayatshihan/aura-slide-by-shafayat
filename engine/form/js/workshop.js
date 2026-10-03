@@ -8,6 +8,10 @@
 // mode 'edit' (v0.3 editor): no tracker; replies carry the deck id + selected slide; a hint row and a folder button sit
 // above/in the box; only this deck's events are shown.
 // Both modes show [[aura:choice]] markers as option buttons + a free-text box.
+// v0.5.2 per-slide conversations (edit mode, a deck with a plan): every slide has its own Claude conversation and the deck one
+// more. The chat shows ONE thread: the selected slide's, or the deck's when "whole deck" is picked in the head. While Claude
+// works (or waits for an answer) it shows that run's thread, and keeps it after the run until the person picks another slide
+// or thread. Events carry `conv` (a slide id, or 'deck'); events from before v0.5.2 have none and belong to the deck thread.
 import * as api from './api.js';
 import { pace } from './api.js';
 import { emit, setClaude } from './bus.js';
@@ -119,6 +123,14 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
   let cards = [];                // choice cards, newest last
   let attached = null;           // {name, state:'up'|'ok'|'err', p}
   let deckRec = null;
+  let slideIds = [];             // the plan's slide ids: one conversation each (empty: the deck has only its own conversation)
+  let view = 'slide';            // the thread the person picked: the selected slide's, or 'deck'
+  let pinned = null;             // the thread of the last run, kept on screen until the person picks another
+  let runKey = null;             // the thread of the run that is live or waiting (this deck's)
+  let shown;                     // the thread on screen (undefined: nothing rendered yet; null: no threads, everything)
+  let own = [];                  // this deck's events, every thread
+  let lastSel = null;
+  let polledBusy = false;        // busy (running or waiting) as the last poll saw it: a run is pinned once, when it is first seen
   const M = { stage: -1, deck: null, asked: false, ok: null, code: null, t0: 0, tEnd: 0, auth: false, progress: false, stopped: false, failed: false, relaxed: false };
 
   // ---------------------------------------------------------------- left: tracker + actions (build mode)
@@ -140,8 +152,11 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
 
   // ---------------------------------------------------------------- right: chat
   const statusTxt = h('span', { class: 'ws-state' }, 'connecting…');
+  const tSlide = h('button', { type: 'button', class: 'ws-th-b', 'aria-pressed': 'true', 'data-nosfx': '', 'data-cursor-label': 'this slide' }, 'this slide');
+  const tDeck = h('button', { type: 'button', class: 'ws-th-b', 'aria-pressed': 'false', 'data-nosfx': '', 'data-cursor-label': 'whole deck' }, 'whole deck');
+  const threadBar = EDIT ? h('div', { class: 'ws-thread', role: 'group', 'aria-label': 'which conversation', hidden: true }, tSlide, tDeck) : null;
   const head = h('div', { class: 'ws-head' }, h('span', { class: 'ws-ava', html: AVATAR }),
-    h('span', { class: 'ws-who' }, 'claude'), h('span', { class: 'ws-dot', 'aria-hidden': 'true' }), statusTxt);
+    h('span', { class: 'ws-who' }, 'claude'), h('span', { class: 'ws-dot', 'aria-hidden': 'true' }), statusTxt, threadBar);
   // F-14: the log is not a live region (it gets a line every second or two for half an hour, and replays its whole history on
   // opening); what a screen reader needs is announced separately: claude starting, asking, finishing (see paint) and its words.
   const log = h('div', { class: 'ws-log', role: 'log', 'aria-live': 'off', 'aria-label': 'what claude is doing', tabindex: '0' });
@@ -165,6 +180,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
     const stick = force || nearBottom();
     log.insertBefore(node, typing.parentNode === log ? typing : null);
     if (!reduced && live) node.classList.add('ws-in');
+    if (!live) node.classList.add('ws-old');
     if (stick) toBottom(); else jump.hidden = false;
     return node;
   }
@@ -402,7 +418,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
         else {
           M.failed = true;
           card('error', ev.code === 'interrupted' ? 'claude was interrupted' : 'something went wrong',
-            ev.code === 'interrupted' ? 'lumi was closed while claude was working. pick up where it left off?' : 'claude stopped unexpectedly. it usually works on a second try.',
+            ev.code === 'interrupted' ? 'lumi was closed while claude was working. pick up where it left off?' : (ev.text || 'claude stopped unexpectedly. it usually works on a second try.'),
             [btn('try again', retry, 'ws-ink')]);
         }
         if (live) sfx('error');
@@ -416,7 +432,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
         if (ev.code === 'stopped') { M.stopped = true; note('you stopped claude. send a message to carry on' + (EDIT ? '.' : ', or start over.'), 'ws-quiet'); }
         else if (!ev.ok && ev.code !== 'limit') {
           M.failed = true;
-          card('error', 'that didn’t finish', 'claude ran into a problem. it usually works on a second try.', [btn('try again', retry, 'ws-ink')]);
+          card('error', 'that didn’t finish', ev.text || 'claude stopped without saying why. it usually works on a second try.', [btn('try again', retry, 'ws-ink')]);
           if (live) sfx('error');
         } else if (ev.ok && M.deck && !M.asked) {
           setStage(DONE_STAGE);
@@ -521,7 +537,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
     const sel = getSlide();
     input.placeholder = elsewhere ? 'claude is busy with another deck…' : running ? 'working… write when it’s done'
       : !hasRun() && !EDIT ? 'nothing to reply to yet' : asking ? 'answer claude’s questions first…' : waiting ? 'type your answer…'
-      : EDIT ? (sel ? `what should change on slide ${sel}?` : 'what should change?')
+      : EDIT ? (shown === 'deck' ? 'what should change everywhere?' : (threadN() || sel) ? `what should change on slide ${threadN() || sel}?` : 'what should change?')
       : done ? 'want a change? ask claude here…' : 'tell claude what to do next…';
     cards.forEach(c => c.setEnabled(open));
     input.title = running ? 'claude is working, so messages wait until it is done' : asking ? 'answer the questions first' : '';
@@ -531,6 +547,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
       : elsewhere ? 'busy with another deck' : running ? 'working' : waiting ? 'waiting for you' : done ? (EDIT ? 'ready' : 'finished')
       : M.stopped ? 'stopped' : M.failed ? 'paused' : hasRun() ? 'idle' : 'ready';
     head.dataset.state = offline ? 'off' : running ? 'run' : waiting ? 'ask' : done ? 'done' : 'idle';
+    paintThread();
     if (running && typing.parentNode !== log) { log.append(typing); if (nearBottom()) toBottom(); }
     if (!running && typing.parentNode) typing.remove();
     paintTime();
@@ -616,7 +633,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
     if (!alive || running) { if (running && gate && gate !== 'cli') showGate(null); return; }
     if (status && status.cli === false) return showGate('cli');
     if ((M.auth || (status && status.signedIn === false)) && !gateDismissed) return showGate('signin');
-    if (EDIT && deckRec && !deckRec.sessionId && !hasRun()) return showGate('nosession');
+    if (EDIT && deckRec && !deckRec.sessionId && !hasRun() && !perSlide()) return showGate('nosession');
     if (!hasRun() && !EDIT) return showGate('start');
     if (gate && gate !== 'cli') showGate(null);
   }
@@ -652,7 +669,11 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
     if (attached && attached.state === 'ok') text = (text ? text + '\n' : '') + `use the file ${attached.name}`;
     if (!text || running || sending || elsewhere) return;
     sending = true;
-    const slide = EDIT ? getSlide() : null;
+    let slide = EDIT ? getSlide() : null, scope;
+    if (perSlide()) {
+      if (shown === 'deck') { scope = 'deck'; slide = null; }
+      else { scope = 'slide'; slide = threadN() || slide; }
+    }
     const b = userBubble(text, slide, 'ws-pending');
     const p = { text, el: b };
     pendingUser.push(p);
@@ -661,7 +682,7 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
     const hadFile = attached;
     attached = null; paintClip();
     paint();
-    const r = await api.claude.reply(text, { deckId: deckId || undefined, slide: slide || undefined });
+    const r = await api.claude.reply(text, { deckId: deckId || undefined, slide: slide || undefined, scope });
     sending = false;
     if (!alive) return;
     if (r && r.ok === false && r.error !== 'busy') {
@@ -717,6 +738,62 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
   homeLink.addEventListener('click', () => { if (onHome) onHome(); });
   function leftSay(t) { leftToast.textContent = t; leftToast.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => leftToast.classList.remove('show'), 3500); }
 
+  // ---------------------------------------------------------------- per-slide threads (v0.5.2)
+  function perSlide() { return EDIT && !!deckId && slideIds.length > 0; }
+  function evThread(ev) { return (ev && ev.conv) || 'deck'; }
+  function threadN() { return shown && shown !== 'deck' ? slideIds.indexOf(shown) + 1 : 0; }
+  function threadKey() {
+    if (!perSlide()) return null;
+    if (runKey && (running || srvWaiting)) return runKey;
+    if (pinned) return pinned;
+    if (view === 'deck') return 'deck';
+    return slideIds[(getSlide() || 1) - 1] || 'deck';
+  }
+  // switching threads replays that thread's history (quietly) into an empty log; false if the thread did not change
+  function renderThread() {
+    const key = threadKey();
+    if (key === shown) return false;
+    shown = key;
+    log.replaceChildren(); closeSteps(); cards = []; pendingUser.length = 0; closePopups();
+    M.stage = -1; hints = [];
+    const evs = (key ? own.filter(e => evThread(e) === key) : own).slice(-240);
+    live = false;
+    for (const ev of evs) handle(ev);
+    live = true;
+    toBottom(false);
+    paintThread(); paintHints();
+    return true;
+  }
+  function paintThread() {
+    if (!threadBar) return;
+    threadBar.hidden = !perSlide();
+    if (threadBar.hidden) return;
+    const deck = shown === 'deck', n = threadN() || getSlide() || 1;
+    tSlide.textContent = `slide ${n}`;
+    tSlide.classList.toggle('on', !deck); tDeck.classList.toggle('on', deck);
+    tSlide.setAttribute('aria-pressed', String(!deck)); tDeck.setAttribute('aria-pressed', String(deck));
+    const locked = !!(runKey && (running || srvWaiting));
+    tSlide.disabled = tDeck.disabled = locked;
+    threadBar.title = locked ? (deck ? 'claude is working on the whole deck' : `claude is working on slide ${n}`) : '';
+  }
+  function pickThread(v) {
+    if (tSlide.disabled) return;
+    sfx('select');
+    view = v; pinned = null;
+    renderThread(); paint();
+    if (running || srvWaiting) schedule(60);
+  }
+  tSlide.addEventListener('click', () => pickThread('slide'));
+  tDeck.addEventListener('click', () => pickThread('deck'));
+  async function refreshIds() {
+    if (!EDIT || !deckId) return;
+    const d = await api.decks.get(deckId);
+    if (!alive || !d || d.ok === false || !d.deck) return;
+    deckRec = d.deck;
+    const ids = Array.isArray(d.deck.slideIds) ? d.deck.slideIds : [];
+    if (ids.join() !== slideIds.join()) { slideIds = ids; renderThread(); paint(); }
+  }
+
   // ---------------------------------------------------------------- polling
   const mine = ev => !deckId || !ev || ev.deck === deckId;
   function schedule(ms) { clearTimeout(pollT); if (alive) pollT = setTimeout(poll, ms); }
@@ -735,14 +812,27 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
     if (offline) { offline = false; idle = 0; }
     if (r.reset) { log.replaceChildren(); closeSteps(); cards = []; M.stage = -1; base = -1; next = 0; return schedule(0); }
     let evs = r.events;
+    const runDeck = r.deckId || null;
+    const forMe = !deckId || !runDeck || runDeck === deckId;
+    const wasBusy = polledBusy;
+    running = !!r.running && forMe;
+    elsewhere = !!r.running && !forMe;
+    srvWaiting = forMe ? r.waiting : undefined;
+    runKey = deckId && runDeck === deckId ? (r.conv || 'deck') : null;
+    polledBusy = !!(running || srvWaiting);
+    // the run's thread stays on screen after it ends, unless the person picked another slide or thread meanwhile (a pick clears
+    // the pin, and the pin is set only when the run is first seen, so a poll already in flight cannot put it back)
+    if (perSlide() && runKey && polledBusy && !wasBusy) pinned = runKey;
+    if (wasBusy && !polledBusy) refreshIds();        // a run may have changed the plan (new slide ids)
     if (base < 0) {
       // first load: a deck's own events (the editor shows its recent history, the workshop its latest build);
       // without a deck, the latest run (and its replies), not older runs from previous briefs
       if (deckId) {
-        const own = evs.filter(mine);
+        own = evs.filter(mine);
         const startIdx = own.map(e => e && e.kind === 'status' && e.code === 'start').lastIndexOf(true);
-        evs = EDIT ? own.slice(-240) : own.slice(Math.max(0, startIdx));
+        evs = EDIT ? [] : own.slice(Math.max(0, startIdx));
         base = 0;
+        if (EDIT) { shown = undefined; renderThread(); for (const ev of own.slice(-240)) fire('claude:event', { event: ev, replay: true, deckId }); }
       } else {
         const startIdx = evs.map(e => e && e.kind === 'status' && e.code === 'start').lastIndexOf(true);
         base = typeof r.runStart === 'number' && r.runStart >= 0 && r.runStart <= evs.length ? r.runStart : Math.max(0, startIdx);
@@ -753,14 +843,15 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
       live = true;
       toBottom(false);
     } else {
-      for (const ev of evs) { if (!mine(ev)) continue; handle(ev); fire('claude:event', { event: ev, deckId }); }
+      const fresh = evs.filter(mine);
+      if (deckId) { own.push(...fresh); if (own.length > 3000) own = own.slice(-2000); }
+      const moved = EDIT && deckId ? renderThread() : false;      // the visible thread changed: it was replayed with these events
+      for (const ev of fresh) {
+        if (!moved && (!EDIT || !shown || evThread(ev) === shown)) handle(ev);
+        fire('claude:event', { event: ev, deckId });
+      }
     }
     next = typeof r.next === 'number' ? r.next : next + r.events.length;
-    const runDeck = r.deckId || null;
-    const forMe = !deckId || !runDeck || runDeck === deckId;
-    running = !!r.running && forMe;
-    elsewhere = !!r.running && !forMe;
-    srvWaiting = forMe ? r.waiting : undefined;
     if (r.sessionId && forMe) session = r.sessionId;
     if (!M.deck && r.lastDeck && M.ok && !running && M.stage === DONE_STAGE && forMe) M.deck = r.lastDeck;
     paint();
@@ -779,14 +870,20 @@ export function mountWorkshop(leftEl, rightEl, opts = {}) {
   paint(); paintHints();
   Promise.all([api.claude.status(false), deckId ? api.decks.get(deckId) : Promise.resolve(null)]).then(([s, d]) => {
     if (!alive) return;
-    if (d && d.ok !== false && d.deck) deckRec = d.deck;
+    if (d && d.ok !== false && d.deck) { deckRec = d.deck; if (EDIT && Array.isArray(d.deck.slideIds)) slideIds = d.deck.slideIds; }
+    lastSel = getSlide();
     if (s && s.ok !== false) { status = s; if (s.sessionId) session = s.sessionId; }
     if (s && s.running && (!deckId || !s.deckId || s.deckId === deckId)) running = true;
     poll();
   });
 
   return {
-    setSlide() { paintHints(); paint(); },
+    setSlide() {
+      const sel = getSlide();
+      if (sel !== lastSel) { lastSel = sel; pinned = null; view = 'slide'; if (running || srvWaiting) schedule(60); }     // a stale 'running' is re-asked at once
+      if (EDIT && deckId && base >= 0) renderThread();
+      paintHints(); paint();
+    },
     fill,
     get hints() { return hints.slice(); },
     get running() { return running; },

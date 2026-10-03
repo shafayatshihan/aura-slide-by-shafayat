@@ -129,6 +129,8 @@ def main():
         test_batch_d.run(sys.modules[__name__])
         import test_batch_e                 # FIXLOG batch E: stages, walls, pre-extraction, run file, hooks + checker in a browser
         test_batch_e.run(sys.modules[__name__])
+        import test_slide_convs             # v0.5.2: one Claude conversation per slide + one for the deck (+ migration)
+        test_slide_convs.run(sys.modules[__name__])
         import test_permissions_real        # v0.5.1: the PreToolUse permission gate + shipped allow rules (no Claude; --real is separate)
         test_permissions_real.run(sys.modules[__name__])
         import test_update_keep             # v0.5.1: an update keeps the user's work and replaces settings.json (real setup.ps1)
@@ -731,8 +733,10 @@ def run_v5_suite():
     pj = wait_plan_idle(P)
     ev = events_from(n0)
     argv = fake_argv(ev)
-    check('building resumes the planning conversation with the deck quality', flag(argv, '--resume') == sessP and
-          flag(argv, '--model') == 'opus' and flag(argv, '--effort') == 'high', argv)
+    sc1 = (json.loads((AURA / 'decks' / f'{P}.json').read_text(encoding='utf-8')).get('slideConvs') or {}).get('s1') or {}
+    check('v0.5.2: slide 1 is built in its OWN new conversation (not the planning one), with the deck quality',
+          '--resume' not in argv and sc1.get('sessionId') and sc1['sessionId'] != sessP and
+          flag(argv, '--model') == 'opus' and flag(argv, '--effort') == 'high', (argv, sc1))
     check('build message is per slide and per plan', any('[build-slide id=' in h and 'n=1 of=' in h and 'deck shell' in h for h in heard(ev)), heard(ev)[:1])
     shells = list((AURA / 'temp' / 'build').glob(f'*-{P[:6]}/index.html'))
     check('v0.5.1: Lumi made the deck shell itself before slide 1 (Claude needs no shell command for it)', bool(shells), shells)
@@ -798,8 +802,9 @@ def run_v5_suite():
           pj.get('waiting') and pj.get('built') == 2 and pj.get('buildTarget') == deep and 'Raise the camera' in evt2 and evt2.count('[[aura:choice') == 1 and
           '[[aura:built' not in evt2 and jpost(f'/api/decks/{P}/build', {'mode': 'next'})[0] == 409, (pj.get('waiting'), pj.get('built'), evt2[:200]))
     argv2 = fake_argv(ev2)
-    check('the answers resume the same conversation (--resume): the one this slide runs in (a large earlier conversation is handed off, L-17)',
-          flag(argv2, '--resume') and flag(argv2, '--resume') == jget(f'/api/decks/{P}')[1]['deck'].get('sessionId'), argv2)
+    own = ((json.loads((AURA / 'decks' / f'{P}.json').read_text(encoding='utf-8')).get('slideConvs') or {}).get(deep) or {}).get('sessionId')
+    check('the answers resume the same conversation (--resume): this slide\'s own (v0.5.2)',
+          flag(argv2, '--resume') and flag(argv2, '--resume') == own, (argv2, own))
     time.sleep(1.5)
     check('no default timer answers the question', plan_of(P).get('waiting') and plan_of(P).get('built') == 2)
     jpost('/api/claude/reply', {'deckId': P, 'text': 'q1: Add a rim light'})

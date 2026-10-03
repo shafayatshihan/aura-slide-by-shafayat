@@ -595,7 +595,7 @@ def deck_view(rec, full=False):
     if px and not (isinstance(px.get('file'), str) and inside(ROOT / px['file'], SLIDES) and (ROOT / px['file']).is_file()): px = None
     v.update(final=fin, finalized=bool(fin), pptx=px, ctxTokens=rec.get('ctxTokens'), sessionLostAt=rec.get('sessionLostAt'), changedSinceFinalize=bool(fin and rec.get('changedSinceFinalize')),
              finalizing=FINALIZER.busy_with(rec['id']), planCount=len(slides),
-             builtCount=sum(1 for x in slides if x.get('built')))
+             builtCount=sum(1 for x in slides if x.get('built')), slideIds=[x.get('id') for x in slides])
     if full: v['plan'] = rec.get('plan')
     v.update(status=status, exists=bool(f), migrated=bool(rec.get('migrated')),
              mtime=int(f.stat().st_mtime) if f else None,
@@ -924,19 +924,115 @@ def result_text(content):
 SESSION_GONE_RE = re.compile(r'no conversation found|session.{0,30}(not found|does not exist|no longer)|could not find (the )?(conversation|session)', re.I)
 
 
-def remember_session(deck_id, sid):
+# Per-slide conversations (v0.5.2): every planned slide has its OWN Claude conversation, kept on the deck record in
+# rec['slideConvs'][<slide id>] = {sessionId, ctxTokens, lostAt, notes: [...], summary}. Server-owned: never in plan.json, so a
+# re-plan by Claude cannot drop it. The record's top-level sessionId stays the DECK conversation (planning, re-plans, whole-deck
+# requests). conv=None below always means the deck conversation; conv='<slide id>' a slide's.
+def slide_convs(rec):
+    sc = rec.get('slideConvs') if isinstance(rec, dict) else None
+    return sc if isinstance(sc, dict) else {}
+
+
+def conv_of(rec, conv):
+    c = slide_convs(rec).get(conv) if conv else None
+    return c if isinstance(c, dict) else {}
+
+
+def conv_session(rec, conv):
+    return conv_of(rec, conv).get('sessionId') if conv else (rec or {}).get('sessionId')
+
+
+def set_conv(deck_id, conv, **fields):
+    """Update the deck conversation's fields (conv None: top-level sessionId/ctxTokens/...) or one slide conversation's
+    (a None value removes that key)."""
+    with DECK_LOCK:
+        rec = load_deck(deck_id)
+        if not rec: return None
+        if not conv:
+            rec.update(fields)
+            return save_deck(rec)
+        sc = rec['slideConvs'] = slide_convs(rec)
+        c = sc[conv] = conv_of(rec, conv)
+        for k, v in fields.items():
+            if v is None: c.pop(k, None)
+            else: c[k] = v
+        return save_deck(rec)
+
+
+def lose_conv(deck_id, conv):
+    """C-08: forget a conversation Claude Code no longer has (only that one: a lost slide conversation never touches the others)."""
+    return set_conv(deck_id, conv, sessionId=None, **({'lostAt': now_iso()} if conv else {'sessionLostAt': now_iso()}))
+
+
+def note_slides(deck_id, ids, note):
+    """Leave a short note for slides whose own conversation did not see a change (a whole-deck edit changed them); it is put in
+    front of that slide's next message and then dropped."""
+    with DECK_LOCK:
+        rec = load_deck(deck_id)
+        if not rec or not ids: return
+        sc = rec['slideConvs'] = slide_convs(rec)
+        for sid in ids:
+            c = sc[sid] = conv_of(rec, sid)
+            c['notes'] = (list(c.get('notes') or []) + [note])[-5:]
+        save_deck(rec)
+
+
+def remember_session(deck_id, sid, conv=None):
     """C-08: the session id is the only thing that lets Claude continue a deck, so it is kept twice: in the deck record and in
-    .aura/decks/<id>/session.json (with the last few ids), each written atomically."""
-    rec = update_deck(deck_id, sessionId=sid)
+    .aura/decks/<id>/session.json (with the last few ids), each written atomically. A slide's conversation goes to that slide."""
+    rec = set_conv(deck_id, conv, sessionId=sid)
     if not rec: return
     try:
         f = work_dir(deck_id) / 'session.json'
-        try: hist = json.loads(f.read_text(encoding='utf-8')).get('history') or []
-        except (OSError, ValueError, AttributeError): hist = []
-        if sid not in [h.get('id') for h in hist if isinstance(h, dict)]: hist.append({'id': sid, 'at': now_iso()})
-        write_atomic(f, json.dumps({'sessionId': sid, 'history': hist[-5:]}, indent=2))
+        try: old = json.loads(f.read_text(encoding='utf-8'))
+        except (OSError, ValueError): old = {}
+        old = old if isinstance(old, dict) else {}
+        hist = old.get('history') if isinstance(old.get('history'), list) else []
+        if sid not in [h.get('id') for h in hist if isinstance(h, dict)]: hist.append({'id': sid, 'at': now_iso(), **({'slide': conv} if conv else {})})
+        write_atomic(f, json.dumps({'sessionId': rec.get('sessionId'),
+                                    'slides': {k: v.get('sessionId') for k, v in slide_convs(rec).items() if isinstance(v, dict) and v.get('sessionId')},
+                                    'history': hist[-12:]}, indent=2))
     except OSError as e:
         log('session file write failed', e)
+
+
+def built_texts(rec):
+    """Best effort: the current text of every built slide, grouped by slide id (the deck's data-edit ids start with the id)."""
+    out = {}
+    try:
+        cands = []
+        if rec.get('build'): cands.append(BUILDS / str(rec['build']) / 'index.html')
+        f = deck_file(rec)
+        if f: cands.append(f)
+        src = next((c for c in cands if c.is_file()), None)
+        if not src: return out
+        html = src.read_text(encoding='utf-8', errors='replace')
+        for m in re.finditer(r'data-edit="(s\d+)-[^"]*"[^>]*>([^<]{1,300})<', html):
+            t = ' '.join(htmllib.unescape(m.group(2)).split())
+            if t: out.setdefault(m.group(1), []).append(t)
+    except OSError:
+        pass
+    return out
+
+
+def plan_digest(rec):
+    """Self-contained summary of the plan (titles, points, bullets, pictures, answered questions) and the built slides' text,
+    so a fresh conversation needs no memory of the old one."""
+    slides, texts, L = plan_slides(rec), built_texts(rec), []
+    for i, sl in enumerate(slides, 1):
+        v = sl.get('visual') or {}
+        pic = ', '.join(x for x in [str(v.get('main') or ''), str(v.get('detail') or ''), str(v.get('motion') or '')] if x and x != 'None')
+        L.append(f'- Slide {i} ({sl.get("id")}, {"built" if sl.get("built") else "not built yet"}): {sl.get("title") or "untitled"}. '
+                 f'Point: {sl.get("point") or "-"}. Bullets: {"; ".join(str(b) for b in sl.get("bullets") or []) or "-"}. Picture: {pic or "-"}.')
+        if sl.get('built') and texts.get(sl.get('id')):
+            L.append('  Text now on the slide: ' + ' | '.join(texts[sl['id']][:8])[:500])
+    plan = rec.get('plan') if isinstance(rec.get('plan'), dict) else {}
+    ans = [d for d in plan.get('doubts') or [] if isinstance(d, dict) and d.get('answer')]
+    if ans:
+        L.append('Questions the person already answered (do not ask again):')
+        for d in ans[:20]:
+            L.append(f'- {one_line(d.get("question") or d.get("text") or d.get("key") or "question")[:160]} -> {one_line(d["answer"])[:160]}')
+    return '\n'.join(L)
 
 
 def recovery_message(rec, message, handoff=False):
@@ -953,8 +1049,43 @@ def recovery_message(rec, message, handoff=False):
              '`.aura/brief/brief.md`; the user files are already extracted to `.aura/temp/text/` (read only what this step needs).',
              f'Look: {rec.get("look") or "Claude chooses"}.',
              'Slides already built (leave them alone unless asked): ' + ('; '.join(built) if built else 'none') + '.',
-             'Slides still to build: ' + ('; '.join(todo) if todo else 'none') + '.']
+             'Slides still to build: ' + ('; '.join(todo) if todo else 'none') + '.',
+             f'Quality: {rec.get("quality") or "balanced"}.', 'The plan in short:', plan_digest(rec)]
     if f: lines.append(f'The editable deck is `{rel_root(f)}`: read it once to see the style you must match.')
+    return '\n'.join(lines) + '\n\n' + message
+
+
+def build_notes(rec, skip=None):
+    """How the slides already built were made (what Claude said when each one finished), so a fresh slide conversation keeps
+    the deck's visual style without the other conversations' history."""
+    L = []
+    for i, sl in enumerate(plan_slides(rec), 1):
+        if not sl.get('built') or sl.get('id') == skip: continue
+        summ = conv_of(rec, sl.get('id')).get('summary')
+        L.append(f'- Slide {i}: ' + (summ if summ else 'built before slides had their own conversations; see it in the deck.'))
+    return '\n'.join(L) or '- none yet: this slide sets the style the others will follow.'
+
+
+def slide_conv_message(rec, sid, message, why='new'):
+    """The opening of a slide's OWN conversation: self-contained (plan digest, look, quality, answered questions, the built
+    slides' current text, how they were built, the deck folder), so it needs no other conversation. why: 'new' (first message
+    of this slide, also the first edit of a slide built before v0.5.2), 'handoff' (its conversation grew too large) or 'lost'."""
+    ids = [s['id'] for s in plan_slides(rec)]
+    n = ids.index(sid) + 1 if sid in ids else 0
+    sl = plan_slides(rec)[n - 1] if n else {}
+    tag = f'[slide-conversation n={n} id={sid}]'
+    head = {'handoff': '[context-handoff] This is a fresh conversation on purpose (the last one for this slide grew too large). ',
+            'lost': '[context-recovery] Your earlier conversation about this slide was lost. '}.get(why, '')
+    f = deck_file(rec)
+    lines = [head + tag + f' This conversation is about slide {n} ("{sl.get("title") or "untitled"}") only. Every slide of this deck '
+             'has its own conversation, and the whole deck has one more: leave the other slides alone unless this message asks for '
+             'them (and then say which you changed). Start from what is on disk; never ask the person to repeat anything. Follow '
+             '`.claude/skills/aura-slide/SKILL.md` and `building.md`. The plan is `' + plan_rel(rec['id']) + '`, the brief is '
+             '`.aura/brief/brief.md`, the user files are already extracted to `.aura/temp/text/` (read only what you need).',
+             f'Look: {rec.get("look") or "Claude chooses"}. Quality: {rec.get("quality") or "balanced"}.',
+             'The plan in short:', plan_digest(rec),
+             'How the slides already built were made (match their style):', build_notes(rec, sid)]
+    if f: lines.append(f'The editable deck is `{rel_root(f)}`; slide {n} is its section {n}. Look at the built slides once to match their style.')
     return '\n'.join(lines) + '\n\n' + message
 
 
@@ -1157,7 +1288,7 @@ def pack_built(deck_id, build):
     return rel_root(p)
 
 
-def check_built(deck_id, n, build):
+def check_built(deck_id, n, build, conv=None):
     """B-04: after a build step, run the full deck check on that deck from the server and put the answer in the chat, so errors are
     visible even if Claude did not run the check or ignored it. Never blocks the next step."""
     node, script = node_exe(), ENGINE / 'tools' / 'deck_check.js'
@@ -1166,16 +1297,16 @@ def check_built(deck_id, n, build):
         r = subprocess.run([node, str(script), str(BUILDS / build), '--no-shots'], cwd=str(ROOT), capture_output=True, timeout=150,
                            stdin=subprocess.DEVNULL, creationflags=NO_WINDOW, env=child_env())
     except (OSError, subprocess.TimeoutExpired) as e:
-        RUNNER.add('status', 'Lumi could not run its own check on the slides just now.', code='check-skipped', deck=deck_id); return
+        RUNNER.add('status', 'Lumi could not run its own check on the slides just now.', code='check-skipped', deck=deck_id, conv=conv); return
     out = (r.stdout + r.stderr).decode('utf-8', 'replace')
     errs = re.findall(r'^\s*ERROR (.*)$', out, re.M)
     if r.returncode == 2 or r.returncode not in (0, 1):
-        RUNNER.add('status', 'Lumi could not run its own check on the slides just now.', code='check-skipped', detail=out[-300:])
+        RUNNER.add('status', 'Lumi could not run its own check on the slides just now.', code='check-skipped', detail=out[-300:], deck=deck_id, conv=conv)
     elif errs:
         RUNNER.add('status', f'Lumi checked slide {n}: {len(errs)} problem(s) left. First: {errs[0][:160]}', code='check-errors',
-                   detail='\n'.join(e[:200] for e in errs[:8]))
+                   detail='\n'.join(e[:200] for e in errs[:8]), deck=deck_id, conv=conv)
     else:
-        RUNNER.add('status', f'Lumi checked slide {n}: clean.', code='check-clean')
+        RUNNER.add('status', f'Lumi checked slide {n}: clean.', code='check-clean', deck=deck_id, conv=conv)
     try: update_deck(deck_id, lastCheck={'at': now_iso(), 'slide': n, 'errors': [e[:200] for e in errs[:8]], 'ok': r.returncode == 0})
     except Exception: pass
 
@@ -1188,8 +1319,15 @@ class Run:
         self.kind, self.meta, self.texts, self.ok, self.asked = kind, meta or {}, [], False, False
         self.started = time.time()
         self.deck_id, self.build, self.deck_done = deck_id, None, None
+        self.conv = None                  # the slide id whose own conversation this run is (None: the deck conversation)
         self.noise, self.err, self.tools = deque(maxlen=30), deque(maxlen=30), {}
         self.limited = False
+        self.resumed = False              # started with --resume (the only runs that can lose their conversation)
+        self.after_loss = False           # this run IS the recovery: a second loss must stop, never loop
+        self.lost = False                 # the CLI said the conversation it was asked to resume does not exist
+        self.said = False                 # Claude produced any assistant text or called any tool
+        self.errors = []                  # the result event's own `errors` list (the real "No conversation found" lives here)
+        self.again = None                 # what to launch again if the conversation turns out to be lost
         self.ctx = 0                      # tokens of context the conversation held at its last message (L-17)
         self.bad_markers = set()
         self.stage = None                 # L-08: the furthest stage derived from the tools Claude called
@@ -1205,6 +1343,7 @@ class Runner:
         self.lock = threading.RLock()
         self.run, self.events = None, []
         self.session_id = self.last_deck = self.deck_id = None
+        self.conv = None              # the conversation of the latest run: a slide id, or None for the deck's own
         self.waiting, self.run_start = False, 0
         self.settling = None          # (run, thread id) while after_run() is still writing the finished run's bookkeeping (S-03)
         self.auth = {'value': None, 'plan': None, 'at': 0.0}
@@ -1240,6 +1379,7 @@ class Runner:
         except Exception:
             st = {}
         self.session_id, self.last_deck, self.deck_id = st.get('sessionId'), st.get('lastDeck'), st.get('deckId')
+        self.conv = st.get('conv') if isinstance(st.get('conv'), str) else None
         self.waiting, self.run_start = bool(st.get('waiting')), int(st.get('runStart') or 0)
         try:
             for ln in (TEMP / self.EVENTS).read_text(encoding='utf-8').splitlines():
@@ -1304,7 +1444,7 @@ class Runner:
     def save(self):
         try:
             write_atomic(TEMP / self.STATE, json.dumps({'sessionId': self.session_id, 'lastDeck': self.last_deck,
-                                                        'deckId': self.deck_id,
+                                                        'deckId': self.deck_id, 'conv': self.conv,
                                                         'waiting': self.waiting, 'running': self.running,
                                                         'runStart': self.run_start}, indent=2))
         except OSError as e:
@@ -1312,7 +1452,7 @@ class Runner:
 
     def add(self, kind, text='', **extra):
         ev = {'i': len(self.events), 't': round(time.time(), 3), 'kind': kind, 'text': text}
-        if self.deck_id: ev['deck'] = self.deck_id
+        if self.deck_id: ev['deck'] = self.deck_id; ev['conv'] = self.conv or 'deck'
         ev.update({k: v for k, v in extra.items() if v is not None})
         self.events.append(ev)
         try:
@@ -1330,7 +1470,7 @@ class Runner:
             fresh = time.time() - self.auth['at'] < 3
             if self.auth['at'] and (not refresh or fresh):
                 return self.auth['value']
-            cmd, val, plan = claude_cmd(), None, None
+            cmd, val, plan, email = claude_cmd(), None, None, None
             if cmd:
                 try:
                     r = subprocess.run(cmd + ['auth', 'status'], cwd=str(ROOT), capture_output=True, timeout=25,
@@ -1341,10 +1481,11 @@ class Runner:
                         info = json.loads(m.group(0))
                         val = bool(info.get('loggedIn'))
                         plan = info.get('subscriptionType') if isinstance(info.get('subscriptionType'), str) else None
+                        email = info.get('email') if isinstance(info.get('email'), str) else None
                     elif AUTH_RE.search(out + r.stderr.decode('utf-8', 'replace')): val = False
                 except Exception as e:
                     log('auth status failed', e)
-            self.auth = {'value': val, 'plan': plan, 'at': time.time()}
+            self.auth = {'value': val, 'plan': plan, 'email': email, 'at': time.time()}
             return val
 
     def plan(self, refresh=False):
@@ -1360,7 +1501,8 @@ class Runner:
         with self.lock:
             return {'cli': claude_cmd() is not None, 'signedIn': signed, 'running': self.running, 'waiting': self.waiting,
                     'sessionId': self.session_id, 'lastDeck': self.last_deck, 'eventCount': len(self.events),
-                    'runStart': self.run_start, 'deckId': self.deck_id, 'subscriptionType': self.auth.get('plan'),
+                    'runStart': self.run_start, 'deckId': self.deck_id, 'conv': self.conv, 'subscriptionType': self.auth.get('plan'),
+                    'email': self.auth.get('email'),
                     'settling': self.settling is not None}     # after_run() is still writing the finished run's bookkeeping
 
     def events_since(self, since):
@@ -1368,17 +1510,19 @@ class Runner:
             reset = since > len(self.events)
             return {'events': self.events[0 if reset else since:], 'next': len(self.events), 'running': self.running,
                     'waiting': self.waiting, 'sessionId': self.session_id, 'lastDeck': self.last_deck,
-                    'runStart': self.run_start, 'deckId': self.deck_id, **({'reset': True} if reset else {})}
+                    'runStart': self.run_start, 'deckId': self.deck_id, 'conv': self.conv, **({'reset': True} if reset else {})}
 
     # ---- runs
     def launch(self, message, resume=False, user_text=None, deck_id=None, slide=None, kind=None, quality=None, meta=None,
-               handoff=False):
+               handoff=False, _after_loss=False, conv=None):
         """Start Claude. A new build (resume=False) belongs to deck_id; a reply resumes deck_id's own session (or the
         current session when no deck is given). The quality flags come from that deck's record unless `quality` is
         given (planning runs always use PLAN_QUALITY). `kind` (start, reply, plan, replan, build-slide) and `meta` are
         kept on the run for after_run(). handoff=True starts a FRESH conversation for a deck that has one (L-17: the old one is
-        too large), handing it the plan and the built slides instead of carrying everything."""
+        too large), handing it the plan and the built slides instead of carrying everything. conv='<slide id>' runs in that
+        slide's OWN conversation (v0.5.2): resumed when it has one, else started fresh from slide_conv_message()."""
         self.wait_settled()
+        again = {'message': message, 'kind': kind, 'quality': quality, 'meta': meta, 'slide': slide, 'conv': conv} if (resume and deck_id) else None
         if not resume and kind in (None, 'start', 'plan', 'replan'):
             ensure_extracted()                       # L-01: before Claude starts, never during
         with self.lock:
@@ -1388,19 +1532,30 @@ class Runner:
             if not cmd: return 503, {'ok': False, 'error': 'cli-missing'}
             rec = load_deck(deck_id) if deck_id else None
             if deck_id and not rec: return 404, {'ok': False, 'error': 'no-deck'}
-            session, recovered = None, False
+            session, recovered, opened = None, False, False
+            if conv and not (rec and conv in [x['id'] for x in plan_slides(rec)]): conv = None
+            notes = list(conv_of(rec, conv).get('notes') or []) if conv else []
+            if notes:
+                message = 'Since you last worked on this slide: ' + ' '.join(notes) + '\n\n' + message
+                if again: again['message'] = message          # a recovery re-run must still carry the notes (cleared below)
             if handoff and rec:
                 resume, recovered = False, True
-                message = recovery_message(rec, message, handoff=True)
+                message = slide_conv_message(rec, conv, message, 'handoff') if conv else recovery_message(rec, message, handoff=True)
             if resume:
-                session = (rec.get('sessionId') if rec else None) if deck_id else self.session_id
-                if not session and rec:
-                    # C-08: this deck's conversation is gone (Claude Code pruned it, another account, a crash). Never a dead
+                session = conv_session(rec, conv) if deck_id else self.session_id
+                if not session and rec and conv and not _after_loss:
+                    # a slide's first conversation (its build, or the first edit of a slide built before v0.5.2): fresh and
+                    # self-contained; never the deck's (possibly huge) conversation
+                    resume, opened = False, True
+                    message = slide_conv_message(rec, conv, message, 'new')
+                    kind = kind or 'reply'
+                elif not session and rec:
+                    # C-08: this conversation is gone (Claude Code pruned it, another account, a crash). Never a dead
                     # end: start a fresh conversation that is handed the plan and the built slides, and say so plainly.
                     resume, recovered = False, True
-                    message = recovery_message(rec, message)
+                    message = slide_conv_message(rec, conv, message, 'lost') if conv else recovery_message(rec, message)
                     kind = kind or 'reply'
-                if not session and not recovered: return 409, {'ok': False, 'error': 'no-session'}
+                if not session and not recovered and not opened: return 409, {'ok': False, 'error': 'no-session'}
                 if not deck_id and self.deck_id:
                     rec = load_deck(self.deck_id)
                     if rec and rec.get('sessionId') != session: rec = None
@@ -1420,6 +1575,8 @@ class Runner:
             if self.assign_job and not self.assign_job(proc):
                 log('could not add Claude to the job object')
             self.deck_id = rec['id'] if rec else None
+            self.conv = conv if rec else None
+            if notes: set_conv(rec['id'], conv, notes=None)
             if resume:
                 self.session_id = session
                 self.add('user', user_text or message, slide=slide)
@@ -1432,19 +1589,29 @@ class Runner:
                              'slides already built.', code='handoff')
                     if user_text: self.add('user', user_text, slide=slide)
                 elif recovered:
-                    self.add('status', 'Claude no longer remembers the earlier conversation about this deck, so Lumi started a fresh '
-                             'one and gave it your plan and the slides already built. Nothing you made was lost.', code='recovered')
+                    self.add('status', 'I lost the earlier conversation (account switched or it expired), so I rebuilt my notes from your '
+                             'plan and built slides - nothing in your deck is lost.', code='recovered')
                     if user_text: self.add('user', user_text, slide=slide)
-                    update_deck(rec['id'], sessionId=None, sessionLostAt=now_iso())
+                    lose_conv(rec['id'], conv)
+                elif opened:
+                    if kind != 'build-slide':
+                        self.add('status', (f'Slide {slide}' if slide else 'This slide') + ' now has its own conversation: Claude starts it '
+                                 'from your plan and the slides as they are now.', code='slide-conv')
+                    if user_text: self.add('user', user_text, slide=slide)
             self.waiting = False
             run = self.run = Run(proc, self.deck_id, kind or ('reply' if resume else 'start'), meta)
-            if run.kind == 'build-slide': run.stage = 'build'; run.hashes = slide_hashes(rec.get('build')) if rec and rec.get('build') else None
+            run.conv = self.conv
+            run.resumed, run.after_loss = bool(resume), _after_loss
+            run.again = again if resume and not _after_loss else None
+            if run.kind == 'build-slide': run.stage = 'build'
+            if (run.kind == 'build-slide' or (run.kind == 'reply' and not run.conv and plan_slides(rec))) and rec and rec.get('build'):
+                run.hashes = slide_hashes(rec.get('build'))     # what this run changed is checked (L-14) and told to the slides (v0.5.2)
             write_run_file(run, rec)
             self.save()
         threading.Thread(target=self._feed, args=(proc, message), daemon=True).start()
         threading.Thread(target=self._drain_err, args=(run,), daemon=True).start()
         threading.Thread(target=self._pump, args=(run,), daemon=True).start()
-        return 200, {'ok': True, 'running': True, 'sessionId': self.session_id, 'deckId': self.deck_id,
+        return 200, {'ok': True, 'running': True, 'sessionId': self.session_id, 'deckId': self.deck_id, 'conv': self.conv,
                      'quality': norm_quality(quality)}
 
     @staticmethod
@@ -1486,7 +1653,7 @@ class Runner:
             if t == 'system':
                 if m.get('subtype') == 'init' and m.get('session_id'):
                     self.session_id = m['session_id']; self.save()
-                    if run.deck_id: remember_session(run.deck_id, self.session_id)
+                    if run.deck_id: remember_session(run.deck_id, self.session_id, run.conv)
             elif t == 'assistant':
                 use = (m.get('message') or {}).get('usage')
                 if isinstance(use, dict):
@@ -1497,11 +1664,13 @@ class Runner:
                 for c in content if isinstance(content, list) else []:
                     if not isinstance(c, dict): continue
                     if c.get('type') == 'text' and (c.get('text') or '').strip():
+                        run.said = True
                         run.texts.append(c['text'])
                         self._deck_from(c['text'])
                         self.add('say', c['text'])
                         self._marker_problems(run, c['text'])
                     elif c.get('type') == 'tool_use':
+                        run.said = True
                         name = c.get('name') or 'Tool'
                         run.tools[c.get('id')] = name
                         bm = BUILD_RE.search(json.dumps(c.get('input') or {}, ensure_ascii=False).replace('\\\\', '/').replace('\\', '/'))
@@ -1538,16 +1707,23 @@ class Runner:
                 if m.get('session_id'): self.session_id = m['session_id']
                 text = m.get('result') if isinstance(m.get('result'), str) else ''
                 err = bool(m.get('is_error')) or str(m.get('subtype') or '').startswith('error')
+                if isinstance(m.get('errors'), list): run.errors = [str(x) for x in m['errors']][:5]
                 run.texts.append(text)
                 run.ok, run.asked = not err, (not err) and aura_markers.has(text, 'ask')
                 self._deck_from(text)
                 self._marker_problems(run, text)
-                if err and AUTH_RE.search(text):
+                etxt = ' '.join([text] + run.errors).strip()
+                if err and AUTH_RE.search(etxt):
                     self.auth = {'value': False, 'plan': None, 'at': time.time()}
-                    self.add('error', 'Claude needs you to sign in first.', code='auth', detail=text[:300])
-                elif err and (run.limited or LIMIT_RE.search(text)):
-                    if not run.limited: self.add('limit', limit_text(None), code='limit', detail=text[:300])
-                    self.add('done', text[:2000], ok=False, code='limit')
+                    self.add('error', 'Claude needs you to sign in first.', code='auth', detail=etxt[:300])
+                elif err and (run.limited or LIMIT_RE.search(etxt)):
+                    if not run.limited: self.add('limit', limit_text(None), code='limit', detail=etxt[:300])
+                    self.add('done', text[:2000] or limit_text(None), ok=False, code='limit')
+                elif err and self._lost(run, etxt):
+                    run.lost = True                    # no `done`: _finish() recovers, or says why it could not
+                elif err:
+                    code, why = failure_reason(run, etxt)
+                    self.add('done', why, ok=False, code=code, detail=etxt[:400], retry=True)
                 else:
                     self.waiting = run.asked
                     self.add('done', text[:4000], ok=not err)
@@ -1574,13 +1750,17 @@ class Runner:
     def _deck_record(self, run):
         """After a run: the deck record learns its session, finished file and build folder."""
         if not run.deck_id: return
-        fields = {'sessionId': self.session_id} if self.session_id else {}
+        fields = {'sessionId': self.session_id} if self.session_id and not run.conv else {}
+        if run.conv:
+            cf = {'sessionId': self.session_id} if self.session_id else {}
+            if run.ctx: cf['ctxTokens'] = run.ctx
+            if cf: set_conv(run.deck_id, run.conv, **cf)
         if run.deck_done:
             p = Path(run.deck_done)
             p = p if p.is_absolute() else ROOT / p
             if (inside(p, SLIDES) or inside(p, DECKS)) and p.is_file(): fields['file'] = rel_root(p)
         if run.build: fields['build'] = run.build
-        if run.ctx: fields['ctxTokens'] = run.ctx
+        if run.ctx and not run.conv: fields['ctxTokens'] = run.ctx
         rec = update_deck(run.deck_id, **fields)
         if rec and rec.get('file'):     # a migrated stand-in for the same file is no longer needed
             for other in all_decks():
@@ -1599,19 +1779,26 @@ class Runner:
                 self.add('done', 'Stopped', ok=False, code='stopped')
             elif not run.got_result:
                 tail = '\n'.join(list(run.noise)[-8:] + list(run.err)[-8:])
-                if AUTH_RE.search(tail):
+                if self._lost(run, tail):
+                    run.lost = True
+                elif AUTH_RE.search(tail):
                     self.auth = {'value': False, 'plan': None, 'at': time.time()}
                     self.add('error', 'Claude needs you to sign in first.', code='auth', detail=tail[-400:])
                 elif LIMIT_RE.search(tail) or run.limited:
                     self.add('limit', limit_text(None), code='limit', detail=tail[-400:])
-                elif SESSION_GONE_RE.search(tail) and run.deck_id:
-                    # C-08: --resume could not find the conversation: forget it, so the next message recovers from the plan
-                    update_deck(run.deck_id, sessionId=None, sessionLostAt=now_iso())
-                    self.add('error', 'Claude no longer remembers this deck\'s conversation. Send your message again: Lumi will '
-                             'start a fresh one from your plan and the slides already built.', code='session-lost', detail=tail[-400:])
                 else:
-                    self.add('error', 'Claude stopped unexpectedly. You can try again.', code='failed',
-                             detail=(tail[-400:] or f'exit code {run.proc.returncode}'))
+                    code, why = failure_reason(run, tail)
+                    self.add('error', why, code=code, detail=(tail[-400:] or f'exit code {run.proc.returncode}'), retry=True)
+            retry = None
+            if run.lost and not run.stopped and run.deck_id:
+                # C-08: the conversation is gone (other account, expired, cleaned up). Forget it and run the same message in a fresh
+                # one rebuilt from the plan. A run that already IS the recovery has no `again`, so it cannot loop.
+                lose_conv(run.deck_id, run.conv)
+                if run.again and not run.after_loss: retry = run.again
+                else:
+                    self.add('error', 'I could not carry on this deck: the earlier conversation is gone and the fresh start did not '
+                             'work either. Your plan and slides are safe. ' + (' '.join(list(run.err)[-2:]) or ' '.join(run.errors))[:200],
+                             code='session-lost', retry=True)
             if self.run is run:
                 self.run = None
                 clear_run_file()
@@ -1626,6 +1813,26 @@ class Runner:
             with self.lock:
                 if self.settling and self.settling[0] is run: self.settling = None
             run.finished.set()
+        if retry:
+            try:
+                st, res = self.launch(retry['message'], resume=True, deck_id=run.deck_id, slide=retry['slide'], kind=retry['kind'],
+                                      quality=retry['quality'], meta=retry['meta'], _after_loss=True, conv=retry.get('conv'))
+                if st != 200:
+                    with self.lock:
+                        self.add('error', 'I could not restart the conversation for this deck (' + str(res.get('error')) + '). Try again.',
+                                 code='session-lost', retry=True)
+            except Exception as e:
+                log('recovery launch failed', repr(e))
+
+    @staticmethod
+    def _lost(run, txt):
+        """Did this resumed run fail only because Claude Code no longer has the conversation? The real CLI says "No conversation
+        found with session ID" (stderr and the result's `errors`); anything else that dies fast with nothing said counts too."""
+        if not (run.resumed and run.deck_id) or run.stopped: return False
+        if SESSION_GONE_RE.search(txt or ''): return True
+        quick = time.time() - run.started < 12
+        return bool(quick and not run.said and not run.limited and not AUTH_RE.search(txt or '') and not LIMIT_RE.search(txt or '')
+                    and not NET_RE.search(txt or '') and (run.got_result or (run.proc.returncode not in (0, None))))
 
     def stop(self):
         with self.lock:
@@ -1677,7 +1884,29 @@ class Runner:
         return 200, {'ok': True, 'signedIn': self.signed_in(refresh=True)}
 
 
+NET_RE = re.compile(r'enotfound|econnreset|econnrefused|etimedout|eai_again|getaddrinfo|fetch failed|network|offline|socket hang up|'
+                    r'could not connect|unable to connect|timed out', re.I)
+
+
+def failure_reason(run, txt):
+    """A short human reason for a run that failed, from what Claude Code said (never a bare "ran into a problem")."""
+    txt = (txt or '').strip()
+    if AUTH_RE.search(txt): return 'auth', 'Claude needs you to sign in first.'
+    if run.limited or LIMIT_RE.search(txt): return 'limit', limit_text(None)
+    if NET_RE.search(txt): return 'network', 'Lumi could not reach Claude. Check your internet connection, then try again.'
+    lines = [ln.strip() for ln in txt.splitlines() if ln.strip() and not ln.lstrip().startswith(('{', 'Ignoring '))]
+    first = lines[-1] if lines else ''      # the error is the last thing Claude Code printed; warnings come first
+    if first: return 'failed', 'Claude stopped: ' + first[:200]
+    code = run.proc.returncode
+    return 'failed', 'Claude stopped without saying why' + (f' (exit code {code})' if code not in (None, 0) else '') + '.'
+
+
 def limit_text(resets_at):
+    if resets_at is None:                      # no reset in the event: the last one Claude reported (usage.json), if still ahead
+        u = read_usage() or {}
+        try:
+            if int(u.get('resetsAt') or 0) > time.time(): resets_at = u['resetsAt']
+        except (TypeError, ValueError): pass
     try:
         when = datetime.datetime.fromtimestamp(int(resets_at)).strftime('%I:%M %p').lstrip('0')
         return f'Claude has reached its usage limit for now. It resets at {when}.'
@@ -2362,6 +2591,9 @@ def write_plan(rec, plan, **fields):
         cur = load_deck(rec['id']) or rec
         cur['plan'] = plan
         cur.update(fields)
+        ids = {s.get('id') for s in plan_slides(cur)}
+        if slide_convs(cur) and set(slide_convs(cur)) - ids:   # a removed slide's conversation must never be resumed by a new slide reusing its id
+            cur['slideConvs'] = {k: v for k, v in slide_convs(cur).items() if k in ids}
         save_deck(cur)
         try:
             write_atomic(work_dir(rec['id']) / 'plan.json', json.dumps(claude_view(plan), indent=2, ensure_ascii=False))
@@ -2779,6 +3011,10 @@ def step_card(slide_id, n):
 
 
 CTX_RESET = int(os.environ.get('AURA_CTX_RESET') or CFG.get('contextResetTokens') or 150000)
+# v0.5.2: a slide's own conversation already holds ~150k tokens right after its build (fresh start + one built slide, the L-17
+# calibration), so handing it off at CTX_RESET would throw its history away on the first edit. It is handed off only once it has
+# grown well past that (several rounds of edits): twice CTX_RESET unless set.
+SLIDE_CTX_RESET = int(os.environ.get('AURA_SLIDE_CTX_RESET') or CFG.get('slideContextResetTokens') or 2 * CTX_RESET)
 
 
 def source_texts(slide):
@@ -2844,6 +3080,18 @@ def reply_slide(deck_id, slide):
     return slide
 
 
+def reply_conv(deck_id, slide, scope=None):
+    """Which conversation a chat message goes to (v0.5.2). An answer to a question goes to the conversation that asked it; a
+    "whole deck" message to the deck's; otherwise the selected slide's own. Decks without a plan (made in one go) have only the
+    deck conversation."""
+    rec = load_deck(deck_id) if deck_id else None
+    ids = [s['id'] for s in plan_slides(rec)] if rec else []
+    if not ids: return None
+    if RUNNER and RUNNER.waiting and RUNNER.deck_id == deck_id: return RUNNER.conv if RUNNER.conv in ids else None
+    if scope == 'deck' or not slide: return None
+    return ids[slide - 1] if 1 <= slide <= len(ids) else None
+
+
 def build_next(deck_id, rest=None):
     rec = load_deck(deck_id)
     if not rec: return 404, {'ok': False, 'error': 'no-deck'}
@@ -2864,15 +3112,15 @@ def build_next(deck_id, rest=None):
     fields = {'buildTarget': s['id'], 'planState': 'building'}
     if rest is not None: fields['buildRest'] = bool(rest)
     rec = update_deck(deck_id, **fields)
-    # L-17: a conversation that has grown past CTX_RESET tokens is not carried further; the next slide starts a fresh one that
-    # is handed the plan and the built slides (the step message is self-contained). Questions asked during a step are answered in
-    # that step's own conversation (the record's sessionId always follows the newest one).
-    fresh = bool(rec.get('sessionId')) and int(rec.get('ctxTokens') or 0) >= CTX_RESET
+    # v0.5.2: the slide is built in its OWN conversation (fresh and self-contained the first time; a retry resumes it). Questions
+    # asked during the step stay in it. L-17 still applies per slide: one past SLIDE_CTX_RESET tokens is handed off to a fresh one.
+    mine = conv_of(rec, s['id'])
+    fresh = bool(mine.get('sessionId')) and int(mine.get('ctxTokens') or 0) >= SLIDE_CTX_RESET
     shell = ensure_shell(rec)
     if shell: rec = load_deck(deck_id) or rec
     code, res = RUNNER.launch(build_message(rec, s, i + 1, len(slides), shell=shell), resume=True, handoff=fresh,
                               user_text=f'make slide {i + 1}: {s.get("title") or "untitled"}', deck_id=deck_id,
-                              kind='build-slide', meta={'slide': s['id'], 'n': i + 1})
+                              kind='build-slide', meta={'slide': s['id'], 'n': i + 1}, conv=s['id'])
     if code != 200:
         update_deck(deck_id, buildTarget=None, **({'buildRest': False} if rest else {}))
         return code, res
@@ -2931,6 +3179,17 @@ def after_run(run):
                 left = [s for s in plan_slides(rec) if not s.get('built')]
                 rec = write_plan(rec, rec['plan'], buildTarget=None, planState='building' if left else 'built',
                                  buildRest=bool(rec.get('buildRest')) and bool(left))
+    if finished_n and target:
+        last = next((t for t in reversed(run.texts) if t and t.strip()), '')      # what Claude said when the slide was done
+        said = re.sub(r'\s+', ' ', '\n'.join(ln for ln in last.splitlines() if '[[aura:' not in ln and not ln.startswith('[fake-'))).strip()
+        if said: set_conv(deck_id, target, summary=said[-300:])
+    if run.kind == 'reply' and not run.conv and good and getattr(run, 'hashes', None) and plan_slides(rec):
+        after = slide_hashes(rec.get('build') or run.build)
+        ids = [s['id'] for s in plan_slides(rec)]
+        changed = [ids[i] for i in range(min(len(run.hashes), len(after or []), len(ids))) if run.hashes[i] != after[i]]
+        if changed:
+            asked = one_line((run.meta or {}).get('said') or 'a change to the whole deck')[:160]
+            note_slides(deck_id, changed, f'a whole-deck change ("{asked}") changed this slide; look at it as it is now in the deck before you edit it.')
     # a build step that asked questions first finishes in the REPLY run that carried the answers: pack and check that one too
     if (run.kind == 'build-slide' or finished_n) and good and not run.asked:
         b = (load_deck(deck_id) or {}).get('build') or run.build
@@ -2941,9 +3200,9 @@ def after_run(run):
             if moved:
                 log('build step changed other slides', deck_id, moved)
                 RUNNER.add('status', 'While building slide %s Claude also changed slide %s. If that was not what you wanted, say so and it can be put back.' %
-                           (n, ', '.join(map(str, moved[:4]))), code='other-slide-touched', deck=deck_id)
+                           (n, ', '.join(map(str, moved[:4]))), code='other-slide-touched', deck=deck_id, conv=run.conv or 'deck')
         pack_built(deck_id, b)              # v0.5.1: Lumi packs, so the step needs no pack command from Claude
-        threading.Thread(target=check_built, args=(deck_id, n, b), daemon=True).start()
+        threading.Thread(target=check_built, args=(deck_id, n, b, run.conv or 'deck'), daemon=True).start()
     if run.deck_done and good:
         rec = update_deck(deck_id, changedSinceFinalize=True)
     if run.stopped:
@@ -3499,9 +3758,22 @@ class H(BaseHTTPRequestHandler):
                 except (TypeError, ValueError):
                     return self.send(400, {'ok': False, 'error': 'bad slide'})
                 if not 1 <= slide <= 999: return self.send(400, {'ok': False, 'error': 'bad slide'})
+            scope = body.get('scope')
+            if scope not in (None, 'deck', 'slide'): return self.send(400, {'ok': False, 'error': 'bad scope'})
             slide = reply_slide(deck_id, slide)
-            message = f'[slide {slide}] {text}' if slide else text
-            return self.send(*RUNNER.launch(message, resume=True, user_text=text, deck_id=deck_id, slide=slide))
+            conv = reply_conv(deck_id, slide, scope)
+            rec = load_deck(deck_id) if deck_id else None
+            handoff = False
+            if conv:
+                ids = [s['id'] for s in plan_slides(rec)]
+                slide = ids.index(conv) + 1                     # the number of the slide whose conversation this is
+                mine = conv_of(rec, conv)
+                # L-17 per slide: a slide conversation past SLIDE_CTX_RESET goes on in a fresh one (never in the middle of a question)
+                handoff = bool(mine.get('sessionId')) and int(mine.get('ctxTokens') or 0) >= SLIDE_CTX_RESET and not RUNNER.waiting
+            elif scope == 'deck': slide = None
+            message = f'[slide {slide}] {text}' if slide else (f'[whole deck] {text}' if scope == 'deck' else text)
+            return self.send(*RUNNER.launch(message, resume=True, user_text=text, deck_id=deck_id, slide=slide, conv=conv, handoff=handoff,
+                                            meta={'said': text, 'scope': 'slide' if conv else 'deck'}))
         if path == '/api/decks':
             rec = new_deck()
             return self.send(200, {'ok': True, 'id': rec['id'], 'deck': deck_view(rec)})

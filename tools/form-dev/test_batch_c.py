@@ -316,7 +316,11 @@ def run_live(T, fs):
     check('L-17: the deck record keeps the conversation size from the stream usage', int(rec.get('ctxTokens') or 0) > 0, rec.get('ctxTokens'))
     evs = jget('/api/claude/events?since=0')[1]['events']
     hand = [e for e in evs if e.get('code') == 'handoff' and e.get('deck') == P]
-    check('L-17: once a conversation passed the threshold, the next slide started a fresh one and said so', len(hand) >= 1, [e.get('code') for e in evs[-12:]])
+    sc = json.loads((T.AURA / 'decks' / f'{P}.json').read_text(encoding='utf-8')).get('slideConvs') or {}
+    # v0.5.2: every slide starts its own conversation, so building slide after slide never grows one past the threshold (the
+    # per-slide hand-off itself is tested in test_slide_convs.py)
+    check('L-17 per slide: each built slide keeps its own conversation size, and none needed a hand-off',
+          all(int((sc.get(k) or {}).get('ctxTokens') or 0) > 0 for k in ('s1', 's2', 's3')) and not hand, ({k: v.get('ctxTokens') for k, v in sc.items()}, len(hand)))
     # D-01: the PowerPoint route
     s, j = jget(f'/api/decks/{P}/pptx')
     check('D-01: pptx status route answers before any export', s == 200 and j.get('running') is False, (s, j))
@@ -429,25 +433,85 @@ def run_recovery(T):
     T.wait_plan_idle(P)
     evs = T.events_from(n0)
     check('C-08: the person is told plainly that continuity was lost and what happened instead',
-          any(e.get('code') == 'recovered' and 'no longer remembers' in e.get('text', '') and 'Nothing you made was lost' in e.get('text', '') for e in evs), [e.get('code') for e in evs])
+          any(e.get('code') == 'recovered' and 'I lost the earlier conversation' in e.get('text', '') and 'nothing in your deck is lost' in e.get('text', '') for e in evs), [e.get('code') for e in evs])
     argv = T.fake_argv(evs)
     check('C-08: the fresh conversation does not --resume the lost one', argv and '--resume' not in argv, argv)
     after = jget(f'/api/decks/{P}')[1]['deck']
     check('C-08: the record has a new session id and remembers when the old one was lost', after.get('sessionId') and after['sessionId'] != sid and after.get('sessionLostAt'), after.get('sessionId'))
-    # strict resume: the CLI answers "No conversation found" for an unknown session -> forgotten, next message recovers
+    # the real CLI: --resume of a conversation it does not have prints "No conversation found" (stderr + result.errors), exit 1,
+    # nothing else. Lumi must recover by itself, in the same send, and say so once.
+    def lost_case(sess, text, tag):
+        d = json.loads(p.read_text(encoding='utf-8'))
+        d['sessionId'] = sess
+        p.write_text(json.dumps(d), encoding='utf-8')
+        n0 = jget('/api/claude/status')[1].get('eventCount', 0)
+        s_, j_ = jpost('/api/claude/reply', {'deckId': P, 'text': text})
+        t0 = time.time()
+        while time.time() - t0 < 60:       # the recovery is a second run started right after the first one ends
+            evs_ = T.events_from(n0)
+            if any(e['kind'] == 'done' or (e['kind'] == 'error') for e in evs_) and not jget('/api/claude/status')[1].get('running'): break
+            time.sleep(0.3)
+        T.wait_plan_idle(P)
+        return s_, T.events_from(n0)
+    s_, evs = lost_case('00000000-dead-beef-0000-000000000000', 'try this lost id', 'beef')
+    starts = [e for e in evs if e.get('code') == 'start']
+    after = jget(f'/api/decks/{P}')[1]['deck']
+    check('C-08: "No conversation found" (real CLI shape) -> recovered by itself: one recovered notice, no error, no failed done',
+          s_ == 200 and sum(e.get('code') == 'recovered' for e in evs) == 1 and not [e for e in evs if e['kind'] == 'error']
+          and not [e for e in evs if e['kind'] == 'done' and not e.get('ok')] and len(starts) == 1, [(e['kind'], e.get('code')) for e in evs])
+    rec_ev = next((e for e in evs if e.get('code') == 'recovered'), {})
+    check('C-08: the notice is the plain sentence the person reads', 'I lost the earlier conversation' in rec_ev.get('text', '') and 'nothing in your deck is lost' in rec_ev.get('text', ''), rec_ev)
+    argv = T.fake_argv(evs)
+    check('C-08: the recovery run does not --resume, the message appears once, and the deck got a NEW session id',
+          argv and '--resume' not in argv and sum(e['kind'] == 'user' for e in evs) == 1 and after.get('sessionId')
+          and 'dead-beef' not in after['sessionId'] and after.get('sessionLostAt'), (argv, after.get('sessionId')))
+    s_, evs = lost_case('00000000-dead-quiet-0000-000000000000', 'quiet one', 'quiet')
+    check('C-08: generic case (resumed run exits 1 at once with nothing said) is recovered the same way',
+          any(e.get('code') == 'recovered' for e in evs) and not [e for e in evs if e['kind'] == 'error'], [(e['kind'], e.get('code')) for e in evs])
+    s_, evs = lost_case('00000000-dead-beef-0000-000000000000', 'fail-fresh please', 'fail')
+    errs = [e for e in evs if e['kind'] == 'error']
+    check('C-08: if the fresh conversation fails too: one recovery attempt only, then a clear reason, no loop',
+          len([e for e in evs if e.get('code') == 'recovered']) == 1 and len(errs) == 1 and errs[-1].get('code') == 'failed'
+          and 'fresh conversation could not start' in errs[-1].get('text', '') and errs[-1].get('retry'), [(e['kind'], e.get('code'), e.get('text', '')[:60]) for e in evs])
+    time.sleep(1.5)
+    check('C-08: ...and nothing keeps running afterwards', not jget('/api/claude/status')[1].get('running') and len(T.events_from(0)) == jget('/api/claude/status')[1]['eventCount'])
+    # failures that are NOT a lost conversation say why, in a few words
     d = json.loads(p.read_text(encoding='utf-8'))
-    d['sessionId'] = '00000000-dead-beef-0000-000000000000'
+    d['sessionId'] = None
     p.write_text(json.dumps(d), encoding='utf-8')
+    jpost('/api/claude/reply', {'deckId': P, 'text': 'make it calmer'})
+    T.wait_plan_idle(P)
     n0 = jget('/api/claude/status')[1].get('eventCount', 0)
-    jpost('/api/claude/reply', {'deckId': P, 'text': 'try this lost id'})
+    jpost('/api/claude/reply', {'deckId': P, 'text': 'crash now'})
     T.wait_plan_idle(P)
     evs = T.events_from(n0)
-    check('C-08: "No conversation found" from the CLI -> a plain session-lost event, the id is forgotten',
-          any(e.get('code') == 'session-lost' for e in evs) and not jget(f'/api/decks/{P}')[1]['deck'].get('sessionId'), [e.get('code') for e in evs])
+    errs = [e for e in evs if e['kind'] == 'error']
+    check('failure: a generic crash shows the first line of stderr, never a bare "ran into a problem"',
+          errs and errs[-1].get('code') == 'failed' and 'something went badly wrong' in errs[-1].get('text', '') and errs[-1].get('retry'), errs)
     n0 = jget('/api/claude/status')[1].get('eventCount', 0)
-    s, j = jpost('/api/claude/reply', {'deckId': P, 'text': 'now carry on'})
+    jpost('/api/claude/reply', {'deckId': P, 'text': 'rate-limit now'})
     T.wait_plan_idle(P)
-    check('C-08: ...and the very next message recovers from the plan', s == 200 and any(e.get('code') == 'recovered' for e in T.events_from(n0)))
+    evs = T.events_from(n0)
+    lim = [e for e in evs if e['kind'] == 'limit']
+    check('failure: a usage limit carries the reset time (event and chat text)', lim and lim[0].get('resetsAt') and 'resets at' in lim[0].get('text', ''), lim)
+    check('failure: ...and the run ends as a limit, not as a bare failure', [e for e in evs if e['kind'] == 'done'][-1].get('code') == 'limit')
+    import form_server as fs
+    with unit_root(fs, 'lost') as root:
+        fs.save_usage({'status': 'rejected', 'resetsAt': int(time.time()) + 3600})
+        check('failure: with no reset in the event, the last reported one (usage.json) is used', 'resets at' in fs.limit_text(None), fs.limit_text(None))
+        class R:   # a stand-in run
+            limited, proc = False, type('P', (), {'returncode': 1})()
+        check('failure: network trouble and "nothing said" both get a human sentence',
+              'internet' in fs.failure_reason(R, 'getaddrinfo ENOTFOUND api.anthropic.com')[1] and 'without saying why' in fs.failure_reason(R, '')[1])
+        deck_json(fs, root, 'dk1', title='Rebuild', quality='high', file=None, sessionId=None, build=None,
+                  plan={'slides': [{'id': 's1', 'title': 'Why vaccines work', 'point': 'Immune memory', 'bullets': ['mRNA', 'LNP'], 'built': True,
+                                    'visual': {'main': '3d', 'detail': 'detailed'}},
+                                   {'id': 's2', 'title': 'Dosing', 'point': 'Two shots', 'bullets': [], 'built': False, 'visual': {'main': 'chart'}}],
+                        'doubts': [{'id': 'd1', 'key': 'tone', 'question': 'Which tone?', 'answer': 'Friendly'}]})
+        msg = fs.recovery_message(fs.load_deck('dk1'), 'make the title shorter')
+        check('C-08: the rebuilt context holds titles, points, pictures, answered questions, built/todo lists, look, quality and the pending message',
+              all(x in msg for x in ('Why vaccines work', 'Immune memory', '3d', 'Which tone?', 'Friendly', 'Dosing', 'Bold Blue', 'Quality: high',
+                                     'Slides already built', '1. Why vaccines work', 'plan.json')) and msg.endswith('make the title shorter'), msg[:400])
 
 
 def run_finalize_options(T, fs):

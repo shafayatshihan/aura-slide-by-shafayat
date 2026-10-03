@@ -34,10 +34,11 @@ The Lumi app is the only way in. It runs you in the background and shows your me
   their answers in the app, so **do not wait for "yes"**: say hello with the short summary and carry straight on. Ask only
   the decisions that are really unclear (see "Asking questions"), never things the brief already answers.
 - **Planning and building (the usual way since v0.5):** a message with `[plan-mode]` or `[plan-edit]` is planning: follow
-  `planning.md`. A message with `[build-slide id=… n=… of=…]` builds exactly that one slide: follow `building.md`. Both are
-  one conversation: the later messages resume the same session.
-- **Editor requests:** later messages in the same conversation come from the editor and usually start with
-  `[slide N]` (the slide the message is about). Follow `editing.md`.
+  `planning.md`. A message with `[build-slide id=… n=… of=…]` builds exactly that one slide: follow `building.md`.
+  Planning, re-plans and whole-deck requests are the **deck's** conversation; **every slide has its own** conversation,
+  which starts with `[slide-conversation n=… id=…]` and a summary of the deck, and is about that slide only.
+- **Editor requests:** `[slide N] …` arrives in slide N's own conversation; `[whole deck] …` (all slides, every title, the
+  theme) in the deck's. A deck made in one go has only one conversation. Follow `editing.md`.
 - **Replies:** a message that answers your choices (lines like `q1: …`) or a question you asked: carry on from where
   you stopped. Its `[slide N]` header is the slide the questions were about (while a slide is being built, that slide).
 

@@ -72,7 +72,7 @@ export function mountHome(el, { audio, onNew, onResume, onOpen, onFinalize, draf
     const plan = String(st.subscriptionType || '').toLowerCase();
     acct.hidden = false;
     acct.classList.toggle('is-free', !!plan && !['pro', 'max', 'team', 'enterprise'].includes(plan));
-    acctT.replaceChildren(...(st.signedIn ? ['claude ', h('b', {}, plan || 'signed in'), plan ? ' plan' : ''] : ['claude: not signed in']));
+    acctT.replaceChildren(...(st.signedIn ? [...(st.email ? [h('b', {}, st.email), ' · '] : []), 'claude ', h('b', {}, plan || 'signed in'), plan ? ' plan' : ''] : ['claude: not signed in']));
     acctGo.textContent = st.signedIn ? 'switch account' : 'sign in';
   }
   let acctArm = 0;

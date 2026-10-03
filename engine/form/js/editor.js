@@ -569,7 +569,7 @@ export function mountEditor(el, { deckId, slide = 1, audio, bus, sceneCtx, mount
   if (build) {
     // the chat is just its input until it is used or Claude speaks now (earlier talk replayed on opening doesn't count)
     chatHost.classList.add('is-quiet');
-    const said = () => chatHost.querySelectorAll('.ws-log .ws-msg, .ws-log .ws-card').length;
+    const said = () => chatHost.querySelectorAll('.ws-log .ws-msg:not(.ws-old), .ws-log .ws-card:not(.ws-old)').length;     // replayed history (a thread switch too) is not news
     let base = -1;
     const open = () => { chatHost.classList.remove('is-quiet'); mo.disconnect(); };
     const wake = () => {
