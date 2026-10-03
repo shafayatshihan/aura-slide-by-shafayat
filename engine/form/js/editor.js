@@ -23,7 +23,7 @@ import { ICON as ICONS } from './dom.js';
 const SVG = { back: ICONS.back, up: ICONS.up, down: ICONS.down, left: ICONS.left, right: ICONS.rright, play: ICONS.play, folder: ICONS.folder, pen: ICONS.pen,
   tip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/></svg>',
 };
-const QUALITY = { best: 'best quality', better: 'even better', maximum: 'maximum', balanced: 'balanced', fast: 'fast' };
+const QUALITY = { best: 'best quality', maximum: 'maximum', balanced: 'balanced', fast: 'fast' };
 
 export function mountEditor(el, { deckId, slide = 1, audio, bus, sceneCtx, mountScene, onHome, onFinalize, build = false } = {}) {
   const sfx = n => { try { audio && audio.sfx && audio.sfx(n); } catch (e) { /* optional */ } };

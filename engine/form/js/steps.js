@@ -117,17 +117,16 @@ export const SCREENS = [
     { type: 'toggle', key: 'style.twoD', label: '2d animations', sub: 'diagrams that move and build up', icon: 'wave', on: 'yes', off: 'no', default: 'yes' },
     { type: 'slider', key: 'style.amount', label: 'how much illustration and animation', min: 0, max: 100, default: 60 },
   ]),
-  // v0.5: quality picker. The server turns it into Claude's model and effort: best = opus/high (default), even better =
-  // opus/xhigh, maximum = opus/max (all three can fall back to sonnet), balanced = sonnet/high, fast = sonnet/low.
+  // v0.5.1: quality picker. The server turns it into Claude's model and effort: best = opus/high (default), maximum =
+  // opus/max, balanced = opus/medium (the opus tiers can fall back to sonnet), fast = sonnet/medium.
   // (Planning the slides always runs on sonnet/high, whatever is picked here.) The old "plan the slides" screen is now
   // the planning page after review.
   screen('quality', 'The look', 'review', 'how careful should claude be?', 'more care means better slides, but it takes longer and uses more of your claude plan.', [
     { type: 'seg', key: 'style.quality', label: 'quality', default: 'best', stack: true, options: [
       { value: 'best', label: 'best · careful and polished (recommended)' },
-      { value: 'better', label: 'even better · thinks longer, slower' },
-      { value: 'maximum', label: 'maximum · thinks the longest, slowest' },
-      { value: 'balanced', label: 'balanced · good slides, quicker' },
-      { value: 'fast', label: 'fast · quickest, simplest slides' }] },
+      { value: 'maximum', label: 'maximum · the best model at its deepest thinking, slowest' },
+      { value: 'balanced', label: 'balanced · the best model, thinks less, quicker' },
+      { value: 'fast', label: 'fast · a lighter model, quickest, simpler slides' }] },
   ]),
 
   // ---- Your files (one screen per folder)

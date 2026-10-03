@@ -9,7 +9,7 @@ conversation has grown large the app starts a fresh one for the next slide (the 
 the deck file once to match the style of the slides already built, and nothing else about them.
 
 A build step starts with `[build-slide id=<id> n=<n> of=<total>]`. Messages also carry a `[deck-folder .aura/decks/<id>]`
-line: that is where this deck's files live and where you pack (`CLAUDE.md`, "Where you write").
+line: that is where this deck's files live and where the deck is packed (`CLAUDE.md`, "Where you write"; in a build step Lumi packs).
 
 ## The step card
 The app pastes this card into **every** build step, word for word (it is read from this file), because both real runs skipped
@@ -21,7 +21,7 @@ STEP CARD (the same in every build step)
 2. A REAL DOUBT WHILE BUILDING: stop, keep what you have in the build folder, say what you found in one sentence, ask the same way, and finish this slide from the answer. Nothing answers for the person.
 3. BUILD ONLY THIS SLIDE, strictly to plan.json (its title, point, bullets, ONE main picture and listed companions, 3D detail and motion, sources). Touch another slide only to repair what this one broke, and say so. A 3D figure shows its real subject in its own setting (LOOK.md 4.0), never a lab bench with a wooden base, gauge, vial or stand unless the subject is that.
 4. BEFORE YOU END THE TURN: deck_check is clean (it now checks numbers, props, empty columns, title-slide fields and contrast too) and you looked at this slide's picture; EVERY NUMBER on the slide is in the user's files or has an entry in `.aura/temp/build/<slug>/provenance.json` (kind source, published with cite, computed with from, figure with figure + readFrom, or illustrative) and the speaker notes say where it comes from - a number you read off a figure by eye is kind figure, and you never crop away the part of the figure it was read from; every warning you leave is named in your reply in one plain sentence; a title slide carries every name and detail the brief gives (presenters, supervisor, institution, event, date); a closing slide is designed for this deck, with nothing empty and nothing pasted unchanged; every text has its data-edit id; speaker notes are written.
-5. END with 1-3 hints for this slide, then these two lines, last: [[aura:built slide="<id>"]] and [[aura:done path="<packed file>"]]. Pack into the deck folder with --out and --replace; no PDF, PowerPoint or notes backups.
+5. END with 1-3 hints for this slide, then [[aura:built slide="<id>"]] as the last line. Lumi packs the deck into the deck folder and runs its own check after the step: do not run pack_deck.py, and make no PDF, PowerPoint or notes backups. Read archetype snippets and other engine files with the Read tool; run only Lumi's own tools (node / the venv python on .aura/engine/tools) - other shell commands are refused.
 <!-- /step-card -->
 
 ## Ask the real design questions first
@@ -90,17 +90,18 @@ Nothing answers for the person: the app never fills in a default by itself while
 3. **When the plan cannot be done well, ask instead of improvising** (same markers as above, at any point in the build): a
    number that is not in the files, a photo you need them to pick, a 3D object you cannot make believable, text that will
    not fit the look's word budget. Their answer comes back as a normal reply; continue the slide then.
-4. **Slide 1 (`n=1`) also sets up the deck shell** (SKILL.md steps 3–5: theme or look, fonts, runtime, footer, the
-   build folder `.aura/temp/build/<slug>/`). Later steps add their slide to the same build folder.
+4. **The deck shell**: Lumi makes it before slide 1 when the look is known (the step message names
+   `.aura/temp/build/<slug>/index.html`); build into that folder and do not start another. When the message does not name one,
+   slide 1 sets it up (SKILL.md steps 3–5: theme or look, fonts, runtime, footer). Later steps add their slide to the same folder.
+   Bold Blue archetypes: Read `.aura/engine/deck/looks/bold-blue/archetypes/<name>.html` directly (LOOK.md section 2).
 5. Every build step follows the normal quality loop for **its** slide: HARD RULES, the look's rules
    (`looks/bold-blue/LOOK.md` for Bold Blue), `deck-toolkit.md`, data-edit ids on every text, speaker notes for the
    slide (presentation time is only used to pace the notes), then `deck_check.js` until the slide is clean, and look
    at its picture.
-6. **Pack into the deck's work folder** (the `[deck-folder]` line; "Where you write" in `CLAUDE.md`):
-   `.aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py .aura/temp/build/<slug> --title "<Title>" --out ".aura/decks/<id>" --replace`
-   Do not make PDF / PowerPoint backups: Lumi's **Finalize** makes the final file, the 3D videos and the PDF later,
-   without you.
-7. End with the hints and the two last lines the step card names (`built`, then `done`).
+6. **Do not pack in a build step.** After the step Lumi adds missing text ids, packs the build folder into the deck's work
+   folder (the `[deck-folder]` line) and runs its own deck check, then shows the result in the chat. Do not make PDF /
+   PowerPoint backups either: Lumi's **Finalize** makes the final file, the 3D videos and the PDF later, without you.
+7. End with the hints and the `built` line the step card names, last.
 8. **Provenance** (SURVEY B-05 / L-05). Numbers that appear in the extracted text of the user's files need nothing. Every other number
    needs a line in `provenance.json` next to the build folder's `index.html`:
    `{"claims":[{"slide":3,"text":"Mach 2.9","kind":"published","cite":"Etheridge et al. 2019"}, {"slide":4,"text":"158 Pa to 355 kPa","kind":"figure","figure":"fig6.png","readFrom":[0.9,0.1,0.08,0.8]}]}`

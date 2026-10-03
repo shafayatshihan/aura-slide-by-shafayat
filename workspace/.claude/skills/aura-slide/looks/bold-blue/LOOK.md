@@ -11,7 +11,7 @@ Files you will use (all under `.aura/engine/deck/`):
 |---|---|
 | `themes/bold-blue.css` | tokens, type, layout grid, footer, stat stacks, chips, tags, cards, entrance motion |
 | `looks/bold-blue/template.html` | the starting deck (title + closing); `new_deck.js --theme bold-blue` uses it |
-| `looks/bold-blue/archetypes/*.html` | one ready slide per archetype: `new_deck.js --snippet <name> --slide <n>` |
+| `looks/bold-blue/archetypes/*.html` | one ready slide per archetype: Read `.aura/engine/deck/looks/bold-blue/archetypes/<name>.html` |
 | `looks/bold-blue/bold-blue.js` | page numbers, count-ups, `BBChart.line` |
 | `looks/bold-blue/studio3d.js` | `BB3D`: studio, materials, textures, shader injections, labels, geometry, post-processing |
 | `looks/bold-blue/timeline.js` | `BBTime`: easing, loop phase, keyframe tracks, segments, camera tours |
@@ -65,8 +65,10 @@ them automatically (kicker, headline, sub, stat rows, chips, goals, cards, tags 
 
 ## 2. Archetype catalogue (a menu; the order is the default story arc)
 
-Print any of them with `node .aura/engine/tools/new_deck.js --snippet <name> --slide <n>` and paste it before the
-closing slide. Each comes with placeholder text, a working scene and model speaker notes. Replace everything.
+Open one with the **Read** tool: `.aura/engine/deck/looks/bold-blue/archetypes/<name>.html` (no shell command needed), replace
+every `{{N}}` with the slide number and the kicker's two-digit number with the slide number minus one (the title slide has
+no kicker number), and paste it before the closing slide. Each comes with placeholder text, a working scene and model speaker
+notes. Replace everything. (`node .aura/engine/tools/new_deck.js --snippet <name> --slide <n>` prints the same, filled in.)
 
 | # | archetype | main visual | companions | layout | words |
 |---|---|---|---|---|---|

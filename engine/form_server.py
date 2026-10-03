@@ -148,24 +148,27 @@ def list_files():
     return out
 
 
-QUALITIES = ('best', 'better', 'maximum', 'balanced', 'fast')
+# v0.5.1 tiers (owner decision): fast = Sonnet / medium, balanced = Opus / medium, best = Opus / high (default, recommended),
+# maximum = Opus / max ("the best model at the best effort"). Opus tiers fall back to Sonnet. "Even better" is gone: a deck
+# saved with it runs as best.
+QUALITIES = ('best', 'maximum', 'balanced', 'fast')
 DEFAULT_QUALITY = 'best'
-QUALITY_TEXT = {'best': 'Best quality (Opus, recommended)', 'better': 'Even better (Opus, extra thinking, slower)',
-                'maximum': 'Maximum (Opus, deepest thinking, slowest)', 'balanced': 'Balanced (Sonnet)',
-                'fast': 'Fast (Sonnet, quickest, lighter on the plan)'}
-QUALITY_MODEL = {'best': ('opus', 'high'), 'better': ('opus', 'xhigh'), 'maximum': ('opus', 'max'),
-                 'balanced': ('sonnet', 'high'), 'fast': ('sonnet', 'low')}
-PLAN_QUALITY = 'balanced'          # the planning page always runs Sonnet / high, whatever the deck's quality
+QUALITY_TEXT = {'best': 'Best quality (Opus, recommended)', 'maximum': 'Maximum (Opus, deepest thinking, slowest)',
+                'balanced': 'Balanced (Opus, quicker)', 'fast': 'Fast (Sonnet, quickest, lighter on the plan)'}
+QUALITY_MODEL = {'best': ('opus', 'high'), 'maximum': ('opus', 'max'), 'balanced': ('opus', 'medium'), 'fast': ('sonnet', 'medium'),
+                 'plan': ('sonnet', 'high')}
+PLAN_QUALITY = 'plan'              # the planning page always runs Sonnet / high, whatever the deck's quality
 
 
 def norm_quality(q):
     q = str(q or '').strip().lower()
-    return q if q in QUALITIES else DEFAULT_QUALITY
+    return q if q in QUALITIES or q == PLAN_QUALITY else DEFAULT_QUALITY
 
 
 def quality_of(brief):
     st = brief.get('style') if isinstance(brief, dict) and isinstance(brief.get('style'), dict) else {}
-    return norm_quality(st.get('quality'))
+    q = norm_quality(st.get('quality'))
+    return q if q in QUALITIES else DEFAULT_QUALITY
 
 
 def quality_flags(q):
@@ -1090,6 +1093,70 @@ def slide_hashes(build):
     return [hashlib.sha1(re.sub(r'\s+', ' ', x).encode('utf-8')).hexdigest() for x in parts]
 
 
+SHELL_THEMES = ('pink-punch', 'bold-blue', 'flat-pack', 'happy-headspace', 'yellow-frame')     # new_deck.js THEMES
+
+
+def look_theme(look):
+    """The new_deck.js theme name of a look ("Bold Blue" -> bold-blue), or None when the look is unknown / Claude chooses."""
+    t = re.sub(r'[^a-z0-9]+', '-', str(look or '').lower()).strip('-')
+    return t if t in SHELL_THEMES else None
+
+
+def tool_run(args, timeout=300):
+    """Run one Lumi tool from the install root; returns (exit code, output) - (None, reason) when it could not start."""
+    try:
+        r = subprocess.run([str(a) for a in args], cwd=str(ROOT), capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL,
+                           creationflags=NO_WINDOW, env=child_env())
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return None, e.__class__.__name__
+    return r.returncode, (r.stdout + r.stderr).decode('utf-8', 'replace')
+
+
+def ensure_shell(rec):
+    """v0.5.1: Lumi makes the deck shell itself (node new_deck.js) before the first build step, so Claude's slide 1 needs no shell
+    command (headless Claude is refused anything that needs approval). Returns the build folder name, or None when the look is
+    unknown or the tool failed: Claude then makes the shell as before."""
+    b = rec.get('build')
+    if b and (BUILDS / b / 'index.html').is_file(): return b
+    theme, node, script = look_theme(rec.get('look')), node_exe(), ENGINE / 'tools' / 'new_deck.js'
+    if not (theme and node and script.is_file()): return None
+    title = deck_display_title(rec) or 'Untitled deck'
+    base = re.sub(r'[^a-z0-9]+', '-', unicodedata.normalize('NFKD', title).encode('ascii', 'ignore').decode().lower()).strip('-')[:40].strip('-')
+    slug = f'{base or "deck"}-{rec["id"][:6]}'
+    code, out = tool_run([node, script, title, '--theme', theme, '--slug', slug], timeout=60)
+    if code != 0 or not (BUILDS / slug / 'index.html').is_file():
+        log('could not make the deck shell', rec['id'], code, (out or '')[-200:]); return None
+    update_deck(rec['id'], build=slug)
+    return slug
+
+
+def pack_built(deck_id, build):
+    """v0.5.1: after a build step Lumi itself adds missing text ids (new_deck.js --ids) and packs the deck into its work folder
+    (pack_deck.py --out .aura/decks/<id> --replace), so the editable file always follows the build folder and Claude needs no shell
+    command to finish a step. Returns the packed file's root-relative path, or None (the step still counts; the reason is logged)."""
+    node, ids, pack = node_exe(), ENGINE / 'tools' / 'new_deck.js', ENGINE / 'tools' / 'pack_deck.py'
+    rec = load_deck(deck_id)
+    if not (rec and build and (BUILDS / build / 'index.html').is_file() and VENV_PY.is_file() and pack.is_file()): return None
+    if node and ids.is_file():
+        code, out = tool_run([node, ids, BUILDS / build], timeout=60)
+        if code != 0: log('text ids could not be added', deck_id, code, (out or '')[-200:])
+    out_dir = work_dir(deck_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    code, out = tool_run([VENV_PY, pack, BUILDS / build, '--title', deck_display_title(rec) or rec.get('title') or 'Deck',
+                          '--out', out_dir, '--replace'], timeout=600)
+    m = re.search(r'^Packed: (.+)$', out or '', re.M)
+    if code != 0 or not m:
+        log('Lumi could not pack the deck', deck_id, code, (out or '')[-300:])
+        RUNNER.add('status', 'Lumi could not pack the deck after this step: ' + ((out or '').strip().splitlines() or ['unknown error'])[-1][:160],
+                   code='pack-failed', deck=deck_id)
+        return None
+    p = Path(m.group(1).strip())
+    p = p if p.is_absolute() else ROOT / p
+    if not (p.is_file() and inside(p, DECKS)): return None
+    update_deck(deck_id, file=rel_root(p), changedSinceFinalize=True)
+    return rel_root(p)
+
+
 def check_built(deck_id, n, build):
     """B-04: after a build step, run the full deck check on that deck from the server and put the answer in the chat, so errors are
     visible even if Claude did not run the check or ignored it. Never blocks the next step."""
@@ -1293,7 +1360,8 @@ class Runner:
         with self.lock:
             return {'cli': claude_cmd() is not None, 'signedIn': signed, 'running': self.running, 'waiting': self.waiting,
                     'sessionId': self.session_id, 'lastDeck': self.last_deck, 'eventCount': len(self.events),
-                    'runStart': self.run_start, 'deckId': self.deck_id, 'subscriptionType': self.auth.get('plan')}
+                    'runStart': self.run_start, 'deckId': self.deck_id, 'subscriptionType': self.auth.get('plan'),
+                    'settling': self.settling is not None}     # after_run() is still writing the finished run's bookkeeping
 
     def events_since(self, since):
         with self.lock:
@@ -2731,7 +2799,7 @@ def slide_card(slide):
     return json.dumps({k: x for k, x in keep.items() if x not in (None, '', [], {})}, ensure_ascii=False)
 
 
-def build_message(rec, slide, n, total):
+def build_message(rec, slide, n, total, shell=None):
     """One build step, SELF-CONTAINED (L-17): the slide's plan entry, what is already built, where the extracted sources are,
     the deck folder and the step card. Claude needs neither plan.json nor the original files to start, so a step costs the same
     in a fresh conversation as in a long one."""
@@ -2741,7 +2809,11 @@ def build_message(rec, slide, n, total):
     texts = source_texts(slide)
     lines = [f'[build-slide id={slide["id"]} n={n} of={total}] Build slide {n} of {total} now: "{slide.get("title") or "untitled"}". '
              'Follow `.claude/skills/aura-slide/building.md`: build ONLY this slide, exactly as planned'
-             + (' (this first step also sets up the deck shell)' if n == 1 else '') + '.',
+             + (' (this first step also sets up the deck shell)' if n == 1 and not shell else '') + '.',
+             *([f'Lumi already made the deck shell: `.aura/temp/build/{shell}/index.html` (template, theme, fonts and look scripts wired, '
+                f'an `assets/` folder). Build into it; do not run new_deck.js to start a deck. For a Bold Blue archetype, Read '
+                '`.aura/engine/deck/looks/bold-blue/archetypes/<name>.html` with the Read tool (replace {{N}} with the slide number).']
+               if shell else []),
              f'This slide\'s plan entry (from `{plan_rel(rec["id"])}`, so you need not open it): {slide_card(slide)}',
              f'Look: {rec.get("look") or "Claude chooses"}. Already built (match its style; do not redo it): ' +
              ('; '.join(built) if built else 'nothing yet') + '.',
@@ -2749,7 +2821,7 @@ def build_message(rec, slide, n, total):
               '. Read only the part you need; do not run extract_text.py again or open the original files.') if texts else
              ('This slide lists no extracted source text: use the plan entry and `.aura/brief/brief.md`; extract a file only if the '
               'slide cannot be built without it.'),
-             f'Pack into the deck folder `{work_rel(rec["id"])}/` (the [deck-folder] line; CLAUDE.md "Where you write").',
+             f'Lumi packs the deck into `{work_rel(rec["id"])}/` and runs its own check after this step: you do not run pack_deck.py.',
              step_card(slide['id'], n)]
     doubts = (rec.get('plan') or {}).get('doubts') or []
     if n == 1:
@@ -2796,7 +2868,9 @@ def build_next(deck_id, rest=None):
     # is handed the plan and the built slides (the step message is self-contained). Questions asked during a step are answered in
     # that step's own conversation (the record's sessionId always follows the newest one).
     fresh = bool(rec.get('sessionId')) and int(rec.get('ctxTokens') or 0) >= CTX_RESET
-    code, res = RUNNER.launch(build_message(rec, s, i + 1, len(slides)), resume=True, handoff=fresh,
+    shell = ensure_shell(rec)
+    if shell: rec = load_deck(deck_id) or rec
+    code, res = RUNNER.launch(build_message(rec, s, i + 1, len(slides), shell=shell), resume=True, handoff=fresh,
                               user_text=f'make slide {i + 1}: {s.get("title") or "untitled"}', deck_id=deck_id,
                               kind='build-slide', meta={'slide': s['id'], 'n': i + 1})
     if code != 200:
@@ -2841,9 +2915,12 @@ def after_run(run):
         ingest_plan(run, rec)
         rec = load_deck(deck_id)
     target = rec.get('buildTarget')
+    finished_n = None                     # the slide number a build step finished in THIS run (also a reply after its questions)
     if target and good and not run.asked:
         built = {slide_ref(rec.get('plan'), m['attrs']['slide']) for m in aura_markers.find(text, 'built')} - {None}
         if target in built or run.deck_done:
+            ids = [s['id'] for s in plan_slides(rec)]
+            finished_n = ids.index(target) + 1 if target in ids else None
             with DECK_LOCK:
                 rec = load_deck(deck_id)
                 for s in plan_slides(rec):
@@ -2854,9 +2931,10 @@ def after_run(run):
                 left = [s for s in plan_slides(rec) if not s.get('built')]
                 rec = write_plan(rec, rec['plan'], buildTarget=None, planState='building' if left else 'built',
                                  buildRest=bool(rec.get('buildRest')) and bool(left))
-    if run.kind == 'build-slide' and good and not run.asked:
+    # a build step that asked questions first finishes in the REPLY run that carried the answers: pack and check that one too
+    if (run.kind == 'build-slide' or finished_n) and good and not run.asked:
         b = (load_deck(deck_id) or {}).get('build') or run.build
-        n = (run.meta or {}).get('n')
+        n = (run.meta or {}).get('n') or finished_n
         before, after = getattr(run, 'hashes', None), slide_hashes(b) if b else None
         if before and after and n:
             moved = [i + 1 for i in range(min(len(before), len(after))) if before[i] != after[i] and i + 1 != n]
@@ -2864,6 +2942,7 @@ def after_run(run):
                 log('build step changed other slides', deck_id, moved)
                 RUNNER.add('status', 'While building slide %s Claude also changed slide %s. If that was not what you wanted, say so and it can be put back.' %
                            (n, ', '.join(map(str, moved[:4]))), code='other-slide-touched', deck=deck_id)
+        pack_built(deck_id, b)              # v0.5.1: Lumi packs, so the step needs no pack command from Claude
         threading.Thread(target=check_built, args=(deck_id, n, b), daemon=True).start()
     if run.deck_done and good:
         rec = update_deck(deck_id, changedSinceFinalize=True)

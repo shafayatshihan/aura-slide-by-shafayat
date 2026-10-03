@@ -101,6 +101,17 @@ if (Quiet "gh release view v$ver --repo $Slug") {
 if ((Read-Host "  Release version $ver to users now? (y / Enter = no, just keep the upload)") -notmatch '^[yY]') {
   Say '  Uploaded. No release made.' 'Green'; Say ''; Read-Host '  Press Enter to close'; exit 0
 }
+# ---- permission gate (v0.5.1): v0.5.0 shipped allow rules that never matched, so Claude could not run Lumi's own tools and the
+# first slide could not be built. No release is tagged unless the REAL claude -p probes pass against the shipped settings.json.
+Say '  Checking that Claude can run Lumi''s tools without approval (real claude -p probes, about 1 minute)...' 'Cyan'
+$permTest = Join-Path $Repo 'tools\form-dev\test_permissions_real.py'
+& $py $permTest --real
+if ($LASTEXITCODE -ne 0) {
+  Say ''; Say '  The permission check FAILED, so nothing was released (your upload is kept).' 'Red'
+  Say "  Fix it, then run it yourself:  $py tools\form-dev\test_permissions_real.py --real" 'Yellow'
+  Say '  (it needs Claude Code installed and signed in; it uses a few small Haiku runs)' 'Gray'
+  Say ''; Read-Host '  Press Enter to close'; exit 1
+}
 if (-not (Quiet "git rev-parse -q --verify refs/tags/v$ver")) { Git tag "v$ver" }
 if (-not (Show "git push origin v$ver")) { Stop-Here 'Could not upload the release tag.' }
 Say ''; Say '  GitHub is building Lumi-Setup.zip (about 1 minute)...' 'Cyan'

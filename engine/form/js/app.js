@@ -427,7 +427,7 @@ function reviewRows() {
     ['look', 'look', (g('look.theme') || '').replace('Claude chooses', 'claude chooses')],
     ['style', 'style', `3d ${g('style.threeD') || 'yes'} · 2d ${g('style.twoD') || 'yes'} · ${(g('style.amountLabel') || 'balanced').toLowerCase()}`],
     ['files', 'files-1', '…'],
-    ['quality', 'quality', ({ best: 'best (recommended)', better: 'even better', maximum: 'maximum', balanced: 'balanced', fast: 'fast' })[g('style.quality')] || 'best (recommended)'],
+    ['quality', 'quality', ({ best: 'best (recommended)', maximum: 'maximum', balanced: 'balanced', fast: 'fast' })[g('style.quality')] || 'best (recommended)'],
   ];
 }
 function buildReview(host) {

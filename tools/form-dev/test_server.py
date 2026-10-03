@@ -129,6 +129,10 @@ def main():
         test_batch_d.run(sys.modules[__name__])
         import test_batch_e                 # FIXLOG batch E: stages, walls, pre-extraction, run file, hooks + checker in a browser
         test_batch_e.run(sys.modules[__name__])
+        import test_permissions_real        # v0.5.1: the PreToolUse permission gate + shipped allow rules (no Claude; --real is separate)
+        test_permissions_real.run(sys.modules[__name__])
+        import test_update_keep             # v0.5.1: an update keeps the user's work and replaces settings.json (real setup.ps1)
+        test_update_keep.run(sys.modules[__name__])
         print('\n[restart: events survive]')
         n_before = jget('/api/claude/status')[1].get('eventCount')
         sid_before = jget('/api/claude/status')[1].get('sessionId')
@@ -392,9 +396,10 @@ def run_v3_suite():
 
     print('\n[quality flags]')
     check('best -> opus/high + sonnet fallback', fs.quality_flags('best') == ['--model', 'opus', '--effort', 'high', '--fallback-model', 'sonnet'])
-    check('balanced -> sonnet/high', fs.quality_flags('balanced') == ['--model', 'sonnet', '--effort', 'high'])
-    check('fast -> sonnet/low', fs.quality_flags('fast') == ['--model', 'sonnet', '--effort', 'low'])
-    check('better -> opus/xhigh + fallback', fs.quality_flags('better') == ['--model', 'opus', '--effort', 'xhigh', '--fallback-model', 'sonnet'])
+    check('balanced -> opus/medium + fallback', fs.quality_flags('balanced') == ['--model', 'opus', '--effort', 'medium', '--fallback-model', 'sonnet'])
+    check('fast -> sonnet/medium', fs.quality_flags('fast') == ['--model', 'sonnet', '--effort', 'medium'])
+    check('"even better" is gone: an old deck saved with it runs as best', 'better' not in fs.QUALITIES and fs.quality_flags('better') == fs.quality_flags('best'))
+    check('the picker offers exactly fast / balanced / best / maximum', set(fs.QUALITIES) == {'fast', 'balanced', 'best', 'maximum'})
     check('maximum -> opus/max + fallback', fs.quality_flags('maximum') == ['--model', 'opus', '--effort', 'max', '--fallback-model', 'sonnet'])
     check('unknown -> best (the default)', fs.quality_flags('ultra') == fs.quality_flags(None) == fs.quality_flags('best'))
     check('planning quality is sonnet/high', fs.quality_flags(fs.PLAN_QUALITY) == ['--model', 'sonnet', '--effort', 'high'])
@@ -435,7 +440,7 @@ def run_v3_suite():
     argv = fake_argv(ev)
     heard = next((e['text'] for e in ev if e['kind'] == 'say' and e['text'].startswith('[fake-heard] ')), '')
     user = next((e for e in ev if e['kind'] == 'user'), {})
-    check('reply uses the deck quality (fast)', flag(argv, '--model') == 'sonnet' and flag(argv, '--effort') == 'low' and
+    check('reply uses the deck quality (fast)', flag(argv, '--model') == 'sonnet' and flag(argv, '--effort') == 'medium' and
           '--fallback-model' not in argv, argv)
     check('reply resumes the deck session', flag(argv, '--resume') == sessA, (flag(argv, '--resume'), sessA))
     check('slide prefix reaches Claude, user event keeps plain text', heard == '[fake-heard] [slide 3] make it pop' and
@@ -564,7 +569,8 @@ def wait_plan_idle(deck_id, timeout=60):
         j = plan_of(deck_id)
         busy = j.get('running') or j.get('queued') or any(x.get('status') in ('queued', 'replanning')
                                                           for x in (j.get('plan') or {}).get('slides') or [])
-        if not busy and not jget('/api/claude/status')[1].get('running'): return j
+        st = jget('/api/claude/status')[1]
+        if not busy and not st.get('running') and not st.get('settling'): return plan_of(deck_id)   # after_run done (S-03)
         time.sleep(0.25)
     return plan_of(deck_id)
 
@@ -728,6 +734,13 @@ def run_v5_suite():
     check('building resumes the planning conversation with the deck quality', flag(argv, '--resume') == sessP and
           flag(argv, '--model') == 'opus' and flag(argv, '--effort') == 'high', argv)
     check('build message is per slide and per plan', any('[build-slide id=' in h and 'n=1 of=' in h and 'deck shell' in h for h in heard(ev)), heard(ev)[:1])
+    shells = list((AURA / 'temp' / 'build').glob(f'*-{P[:6]}/index.html'))
+    check('v0.5.1: Lumi made the deck shell itself before slide 1 (Claude needs no shell command for it)', bool(shells), shells)
+    check('v0.5.1: the build message names that shell, says Lumi packs, and points at the archetype files',
+          any('Lumi already made the deck shell' in h for h in heard(ev)) and all(x in fs.build_message({'id': P, 'plan': pj['plan'], 'look': 'Bold Blue'},
+          pj['plan']['slides'][0], 1, 3, shell='x-1') for x in ('`.aura/temp/build/x-1/index.html`', 'you do not run pack_deck.py', 'archetypes/<name>.html')), heard(ev)[:1])
+    check('v0.5.1: the step card no longer asks Claude to pack (the built marker is last)',
+          not any('[[aura:done path="<packed file>"]]' in h for h in heard(ev)))
     rec = jget(f'/api/decks/{P}')[1]['deck']
     check('slide 1 built, editable deck in the work folder', pj.get('built') == 1 and pj['plan']['slides'][0].get('built') and
           str(rec.get('file')).startswith(f'.aura/decks/{P}/') and rec.get('status') == 'ready' and not rec.get('finalized'), rec.get('file'))
@@ -758,6 +771,11 @@ def run_v5_suite():
     # (answer text goes back as plain lines)
     pj = wait_plan_idle(P)
     check('the answer finishes that slide', pj.get('built') == 2 and not pj.get('buildTarget'), (pj.get('built'), pj.get('buildTarget')))
+    t_ = time.time()
+    last_check = lambda: (json.loads((AURA / 'decks' / f'{P}.json').read_text(encoding='utf-8')).get('lastCheck') or {})
+    while time.time() - t_ < 150 and last_check().get('slide') != 2: time.sleep(0.5)
+    check('v0.5.1: a step that asked first is still packed + checked by Lumi when the reply finishes it (e2e found this gap)',
+          last_check().get('slide') == 2, last_check())
 
     # four design questions up front, one more midway, answers resume the same run to completion
     n_ev = len(jget('/api/claude/events?since=0')[1]['events'])

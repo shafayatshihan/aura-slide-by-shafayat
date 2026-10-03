@@ -382,9 +382,10 @@ updatedAt, sessionId, brief, build, flow, planState, buildRest, buildTarget). Th
 `.aura/temp/build/<deck>/`. **Only Finalize writes into `4 - Your slides/`.** `.aura/temp/plan.md` is Claude's own
 scratch notes, not the plan.
 
-**Quality picker** (`QUALITIES` in `form_server.py`): `best` (Opus / high, default), `better` (Opus / xhigh),
-`maximum` (Opus / max), `balanced` (Sonnet / high), `fast` (Sonnet / low). Planning always runs `PLAN_QUALITY`
-(`balanced`) whatever the deck's quality.
+**Quality picker** (`QUALITIES` in `form_server.py`, v0.5.1): `best` (Opus / high, default, recommended), `maximum`
+(Opus / max), `balanced` (Opus / medium), `fast` (Sonnet / medium); the Opus tiers pass `--fallback-model sonnet`. "Even
+better" (Opus / xhigh) was removed; a deck saved with it runs as `best`. Planning always runs `PLAN_QUALITY` (Sonnet / high)
+whatever the deck's quality.
 
 **Routes added since v0.3** (localhost only, same Host/Origin rules as section 7):
 

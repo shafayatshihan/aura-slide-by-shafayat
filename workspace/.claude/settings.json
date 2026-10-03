@@ -8,54 +8,94 @@
       "Write",
       "Glob",
       "Grep",
-      "Bash(.aura/venv/Scripts/python.exe .aura/engine/tools/:*)",
-      "Bash(./.aura/venv/Scripts/python.exe .aura/engine/tools/:*)",
-      "Bash(.aura/venv/Scripts/python.exe -c:*)",
-      "Bash(node .aura/engine/tools/:*)",
-      "Bash(node .aura/engine/rules/:*)",
+      "Bash(node .aura/engine/tools/deck_check.js:*)",
+      "Bash(.aura/venv/Scripts/python.exe .aura/engine/tools/export_notes.py:*)",
+      "Bash(./.aura/venv/Scripts/python.exe .aura/engine/tools/export_notes.py:*)",
+      "Bash(node .aura/engine/tools/export_pdf.js:*)",
+      "Bash(.aura/venv/Scripts/python.exe .aura/engine/tools/export_pptx.py:*)",
+      "Bash(./.aura/venv/Scripts/python.exe .aura/engine/tools/export_pptx.py:*)",
+      "Bash(.aura/venv/Scripts/python.exe .aura/engine/tools/extract_text.py:*)",
+      "Bash(./.aura/venv/Scripts/python.exe .aura/engine/tools/extract_text.py:*)",
+      "Bash(node .aura/engine/tools/finalize.js:*)",
+      "Bash(node .aura/engine/tools/new_deck.js:*)",
+      "Bash(.aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py:*)",
+      "Bash(./.aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py:*)",
+      "Bash(node .aura/engine/tools/shoot_slides.js:*)",
+      "Bash(node .aura/engine/tools/three_min.js:*)",
+      "Bash(node .aura/engine/rules/check_rules.js:*)",
       "Bash(ls:*)",
       "Bash(mkdir:*)",
-      "Bash(cp:*)",
-      "Bash(mv:*)",
-      "PowerShell(.aura/venv/Scripts/python.exe .aura/engine/tools/:*)",
-      "PowerShell(.aura\\venv\\Scripts\\python.exe .aura\\engine\\tools\\:*)",
-      "PowerShell(./.aura/venv/Scripts/python.exe .aura/engine/tools/:*)",
-      "PowerShell(.\\.aura\\venv\\Scripts\\python.exe .aura\\engine\\tools\\:*)",
-      "PowerShell(& .aura/venv/Scripts/python.exe .aura/engine/tools/:*)",
-      "PowerShell(& .\\.aura\\venv\\Scripts\\python.exe .aura\\engine\\tools\\:*)",
-      "PowerShell(.aura/venv/Scripts/python.exe -c:*)",
-      "PowerShell(node .aura/engine/tools/:*)",
-      "PowerShell(node .aura\\engine\\tools\\:*)",
-      "PowerShell(node .aura/engine/rules/:*)",
+      "PowerShell(node .aura/engine/tools/deck_check.js:*)",
+      "PowerShell(node .aura\\engine\\tools\\deck_check.js:*)",
+      "PowerShell(.aura/venv/Scripts/python.exe .aura/engine/tools/export_notes.py:*)",
+      "PowerShell(.\\.aura\\venv\\Scripts\\python.exe .\\.aura\\engine\\tools\\export_notes.py:*)",
+      "PowerShell(& .aura/venv/Scripts/python.exe .aura/engine/tools/export_notes.py:*)",
+      "PowerShell(node .aura/engine/tools/export_pdf.js:*)",
+      "PowerShell(node .aura\\engine\\tools\\export_pdf.js:*)",
+      "PowerShell(.aura/venv/Scripts/python.exe .aura/engine/tools/export_pptx.py:*)",
+      "PowerShell(.\\.aura\\venv\\Scripts\\python.exe .\\.aura\\engine\\tools\\export_pptx.py:*)",
+      "PowerShell(& .aura/venv/Scripts/python.exe .aura/engine/tools/export_pptx.py:*)",
+      "PowerShell(.aura/venv/Scripts/python.exe .aura/engine/tools/extract_text.py:*)",
+      "PowerShell(.\\.aura\\venv\\Scripts\\python.exe .\\.aura\\engine\\tools\\extract_text.py:*)",
+      "PowerShell(& .aura/venv/Scripts/python.exe .aura/engine/tools/extract_text.py:*)",
+      "PowerShell(node .aura/engine/tools/finalize.js:*)",
+      "PowerShell(node .aura\\engine\\tools\\finalize.js:*)",
+      "PowerShell(node .aura/engine/tools/new_deck.js:*)",
+      "PowerShell(node .aura\\engine\\tools\\new_deck.js:*)",
+      "PowerShell(.aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py:*)",
+      "PowerShell(.\\.aura\\venv\\Scripts\\python.exe .\\.aura\\engine\\tools\\pack_deck.py:*)",
+      "PowerShell(& .aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py:*)",
+      "PowerShell(node .aura/engine/tools/shoot_slides.js:*)",
+      "PowerShell(node .aura\\engine\\tools\\shoot_slides.js:*)",
+      "PowerShell(node .aura/engine/tools/three_min.js:*)",
+      "PowerShell(node .aura\\engine\\tools\\three_min.js:*)",
+      "PowerShell(node .aura/engine/rules/check_rules.js:*)",
+      "PowerShell(node .aura\\engine\\rules\\check_rules.js:*)",
       "PowerShell(Get-ChildItem:*)",
       "PowerShell(Get-Content:*)",
-      "PowerShell(Test-Path:*)",
-      "PowerShell(New-Item:*)",
-      "PowerShell(Copy-Item:*)",
-      "PowerShell(Move-Item:*)"
+      "PowerShell(Test-Path:*)"
     ],
     "deny": [
       "Edit(.aura/engine/**)",
       "Write(.aura/engine/**)",
+      "Edit(.aura/venv/**)",
+      "Write(.aura/venv/**)",
       "Edit(.claude/**)",
       "Write(.claude/**)",
       "Read(**/.env)",
       "Bash(rm:*)",
+      "Bash(rmdir:*)",
       "Bash(git:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
       "PowerShell(Remove-Item:*)",
       "PowerShell(git:*)",
       "PowerShell(Invoke-WebRequest:*)",
-      "PowerShell(Invoke-Expression:*)"
+      "PowerShell(Invoke-RestMethod:*)",
+      "PowerShell(Invoke-Expression:*)",
+      "PowerShell(iex:*)"
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"require(require('path').resolve(process.env.CLAUDE_PROJECT_DIR||'.','.aura','engine','rules','permit.js')).main()\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "node .aura/engine/rules/check_rules.js --hook",
+            "command": "node -e \"process.argv.splice(1,0,'check_rules.js','--hook');require(require('path').resolve(process.env.CLAUDE_PROJECT_DIR||'.','.aura','engine','rules','check_rules.js'))\"",
             "timeout": 120
           }
         ]
@@ -66,7 +106,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .aura/engine/rules/check_rules.js --stop",
+            "command": "node -e \"process.argv.splice(1,0,'check_rules.js','--stop');require(require('path').resolve(process.env.CLAUDE_PROJECT_DIR||'.','.aura','engine','rules','check_rules.js'))\"",
             "timeout": 180
           }
         ]

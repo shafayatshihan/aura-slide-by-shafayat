@@ -63,7 +63,7 @@ The app reads special lines in your messages. This section is the only prose def
 | `[[aura:ask]]` | the last line of a turn that waits for the person. **Never while planning.** | wait for the reply; lock "make next slide" while a question is open (server and browser) |
 | `[[aura:choice …]]` | to ask a question (below) | show buttons: build popup, editor chat; in planning, a doubt card on the plan page (browser, server) |
 | `[[aura:hint slide=N text="…"]]` | 3–5 after a one-shot build or an edit; 1–3 after a built slide | suggestion chips (browser) |
-| `[[aura:done path="…"]]` | the very last line when a deck was built or changed | learn which file is the deck (server, browser) |
+| `[[aura:done path="…"]]` | the very last line when you packed a deck (not in a build step: Lumi packs, `built` is last) | learn which file is the deck (server, browser) |
 | `[[aura:plan path="…"]]` | the very last line of a planning run (`path` is optional and informational) | read `plan.json` (server) |
 | `[[aura:plan-ok slide="s3"]]` | one per re-planned slide that raises no doubt | show "all clear" on that slide (server) |
 | `[[aura:built slide="s3"]]` | the line before `done`, in a `[build-slide]` step | mark the slide built, unlock the next step (server) |
@@ -179,7 +179,7 @@ Reply in this shape, filled with their details:
 - `look.theme` names one of the five Aura themes → use it. "Claude chooses" (or empty) → pick the theme that suits the
   topic and audience (see the guide in `deck-toolkit.md`) and tell the user which one you picked and why, in one line.
 - **Bold Blue → read `looks/bold-blue/LOOK.md` first, whole, every time.** It is the look's authority: tokens,
-  the archetype menu (`node .aura/engine/tools/new_deck.js --snippet list`), the 3D and chart recipes, the writing
+  the archetype menu (its section 2; Read the snippet files in `.aura/engine/deck/looks/bold-blue/archetypes/` directly), the 3D and chart recipes, the writing
   voice, the speaker-notes rules and the clash matrix. It overrides the form's visual choices, `aura-blend.md` and
   `deck-toolkit.md` wherever they differ; Bold Blue has no brand file.
 - Any other look: read `aura-blend.md`, the theme's brand file (`brands/<name>/brand-style.md`) and the theme
@@ -190,7 +190,8 @@ Reply in this shape, filled with their details:
 ## 6. Build the deck
 `[[aura:stage=build]]`  Read `deck-toolkit.md` first, every time.
 - Start from the template: `node .aura/engine/tools/new_deck.js "<Title>" --theme <theme-file-name>`
-  → `.aura/temp/build/<slug>/index.html`. Copy the pictures you use into its `assets/` folder (`cp`), never move
+  → `.aura/temp/build/<slug>/index.html`. In a build step Lumi has usually made it already (the step message names the folder):
+  then build into that one and do not start another. Copy the pictures you use into its `assets/` folder (`cp`), never move
   or change their originals.
 - Write the slides into that `index.html`. Every slide: one idea, headline + one supporting visual, speaker notes in
   `<aside class="notes" data-aura-notes>`, `data-kind` and `data-minutes` set.
@@ -235,6 +236,8 @@ Reply in this shape, filled with their details:
 
 ## 8. Pack it
 `[[aura:stage=export]]`
+- **A build step (`[build-slide ...]`) does not pack**: Lumi adds the text ids, packs into the deck folder and runs its check
+  itself after the step. Everything else (edits, replies, an old one-shot start) packs as below.
 - Pack where "Where you write" in `CLAUDE.md` says. With a `[deck-folder .aura/decks/<id>]` line (the usual case):
   `.aura/venv/Scripts/python.exe .aura/engine/tools/pack_deck.py .aura/temp/build/<slug> --title "<Title>" --out ".aura/decks/<id>" --replace`,
   and no PDF / PowerPoint / speaker-note backups: Finalize makes the HTML and PDF, and the finalize screen has a button for the
